@@ -70,6 +70,7 @@ class GStreamerVideoTrack(MediaStreamTrack):
         print(f"{'='*80}\n")
 
         # RTSP -> decodebin -> TCP 环回（严格使用 f-string，避免语法错误）
+        # 修复：在 decodebin 后添加 ! videoconvert ! video/x-raw,format=I420
         pipeline = f'gst-launch-1.0 -q -e rtspsrc location={self.rtsp_url} latency=0 ! decodebin ! videoconvert ! video/x-raw,format=I420,width={self.width},height={self.height},framerate={self.framerate}/1 ! tcpserversink host=127.0.0.1 port={self.tcp_port} sync=false'
 
         print(f"GStreamer Pipeline:\n{pipeline}\n")

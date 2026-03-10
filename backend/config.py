@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     VIDEO_WATCHDOG_TIMEOUT_S: float = 5.0  # 视频看门狗超时（秒）
     VIDEO_RESOLUTION: str = "1920x1080"  # 1080p 分辨率
     VIDEO_BITRATE: int = 8000000  # 8 Mbps
-    VIDEO_FRAMERATE: int = 60  # 帧率
+    VIDEO_FRAMERATE: int = 30  # 帧率（降低到 30fps 以兼容更多相机）
     VIDEO_UDP_PORT: int = 19856  # UDP 视频接收端口（图传端口）
 
     # UDP 视频流转发器配置（已禁用 - video_track_native 直接监听 UDP）

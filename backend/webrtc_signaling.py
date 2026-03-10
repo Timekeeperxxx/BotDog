@@ -103,13 +103,13 @@ class WebRTCPeerConnection:
                     self._ice_gathering_complete = True
                     logger.info(f"ICE 收集完成: {self.client_id}, 共 {len(self._ice_candidates)} 个候选")
 
-            # 创建并添加视频轨道（使用 GStreamer UDP→UDP 纯透传架构）
-            # 外部 UDP(5000) 接收机器狗推流，内部 UDP(6000) 透传给 Python
+            # 创建并添加视频轨道（使用 GStreamer RTSP 直连真实相机架构）
+            # RTSP 直连：rtsp://192.168.144.25:8554/main.264
             # 从配置读取参数并解析分辨率
             width, height = map(int, settings.VIDEO_RESOLUTION.split('x'))
             video_track = GStreamerVideoSourceFactory.create_track(
-                udp_port_in=settings.UDP_RELAY_LISTEN_PORT,  # 外部 UDP 5000（接收机器狗推流）
-                udp_port_out=6000,  # 内部 UDP 6000（透传给 Python）
+                rtsp_url=settings.CAMERA_RTSP_URL,  # RTSP 直连真实相机
+                tcp_port=6000,  # TCP 环回端口
                 width=width,
                 height=height,
                 framerate=settings.VIDEO_FRAMERATE,
