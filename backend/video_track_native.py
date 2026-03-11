@@ -20,9 +20,11 @@ import threading
 import time
 from typing import Optional
 
+import av
 from av import VideoFrame
 from aiortc import MediaStreamTrack
 
+from .config import settings
 
 class GStreamerVideoTrack(MediaStreamTrack):
     """
@@ -47,13 +49,18 @@ class GStreamerVideoTrack(MediaStreamTrack):
         self.width = width
         self.height = height
         self.framerate = framerate
-        self._queue: asyncio.Queue[Optional[VideoFrame]] = asyncio.Queue(maxsize=30)
+        self._queue: asyncio.Queue[Optional[tuple[VideoFrame, float]]] = asyncio.Queue(maxsize=settings.VIDEO_QUEUE_MAXSIZE)
         self._started = False
         self._process: Optional[subprocess.Popen] = None
         self._task: Optional[asyncio.Task] = None
         self._read_thread: Optional[threading.Thread] = None
         self._tcp_socket: Optional[socket.socket] = None
         self._frame_size = width * height * 3 // 2  # YUV420P = 1.5 bytes per pixel
+        # H.264 解码器（持久化，使用 CodecContext.parse 解析包）
+        self._h264_decoder: Optional[av.CodecContext] = None
+        self._decoder_lock = threading.Lock()
+        self._recv_count = 0
+        self._latency_log_interval = 30
 
     def start(self):
         """启动 GStreamer RTSP 管道（同步方法）"""
@@ -67,15 +74,22 @@ class GStreamerVideoTrack(MediaStreamTrack):
         print(f"解码器: decodebin (自动选择)")
         print(f"内部输出: TCP 127.0.0.1:{self.tcp_port} (避免 stdout 死锁)")
         print(f"分辨率: {self.width}x{self.height} @ {self.framerate} FPS")
-        print(f"网络延迟: 100ms (抗撕裂优化)")
+        print(f"延迟配置: RTSP={settings.VIDEO_RTSP_LATENCY_MS}ms, Jitter={settings.VIDEO_RTP_JITTER_MS}ms, Queue={settings.VIDEO_QUEUE_MAXSIZE}帧")
         print(f"{'='*80}\n")
 
-        # RTSP -> decodebin -> TCP 环回（优化抗撕裂版本 - 100ms 低延迟）
-        # 关键优化：
-        # 1. latency=100：100ms 缓冲，平衡延迟和画质（可调 50-200）
-        # 2. drop-on-latency=true：超时帧直接丢弃，不输出撕裂画面
-        # 3. rtpjitterbuffer latency=100：RTP 层防抖动缓冲
-        pipeline = f'gst-launch-1.0 -q -e rtspsrc location={self.rtsp_url} latency=100 drop-on-latency=true ! rtpjitterbuffer latency=100 do-lost=true ! decodebin ! videoconvert ! video/x-raw,format=I420,width={self.width},height={self.height},framerate={self.framerate}/1 ! tcpserversink host=127.0.0.1 port={self.tcp_port} sync=false'
+        # RTSP -> decodebin -> videoconvert -> I420 -> x264enc -> h264parse -> TCP 环回（压缩传输）
+        # 目标：1080P 压缩传输，降低操作反馈延迟
+        pipeline = (
+            f'gst-launch-1.0 -q -e '
+            f'rtspsrc location={self.rtsp_url} latency={settings.VIDEO_RTSP_LATENCY_MS} drop-on-latency=true '
+            f'! decodebin '
+            f'! videoconvert '
+            f'! video/x-raw,format=I420,width={self.width},height={self.height},framerate={self.framerate}/1 '
+            f'! x264enc tune=zerolatency speed-preset=ultrafast bitrate=5000 key-int-max=30 '
+            f'! h264parse config-interval=1 '
+            f'! video/x-h264,stream-format=byte-stream '
+            f'! tcpserversink host=127.0.0.1 port={self.tcp_port} sync=false'
+        )
 
         print(f"GStreamer Pipeline:\n{pipeline}\n")
 
@@ -187,45 +201,64 @@ class GStreamerVideoTrack(MediaStreamTrack):
 
         print("[OK] GStreamer RTSP 进程已停止")
 
-    def _read_frames(self):
-        """从 TCP Socket 读取 I420 原始帧数据"""
-        buffer = bytearray()
-        frame_count = 0
+    def _get_h264_decoder(self) -> av.CodecContext:
+        """获取或创建 H.264 解码器（线程安全）"""
+        with self._decoder_lock:
+            if self._h264_decoder is None:
+                self._h264_decoder = av.CodecContext.create('h264', 'r')
+            return self._h264_decoder
 
-        print(f"[读取线程] 开始从 TCP 读取 I420 真实画面数据...")
+    def _read_frames(self):
+        """从 TCP Socket 读取 H.264 压缩字节流（流式读取）"""
+        frame_count = 0
+        dropped_frames = 0
+
+        print(f"[读取线程] 开始从 TCP 读取 H.264 压缩流...")
+        print(f"[读取线程] 使用 av.CodecParser 解析 + 队列 maxsize=1（只保留最新帧）")
 
         try:
+            decoder = self._get_h264_decoder()
+
             while self._started and self._tcp_socket:
                 try:
-                    # 疯狂读取，不让 TCP 缓冲区满
                     data = self._tcp_socket.recv(65536)
                     if not data:
                         print(f"[读取线程] TCP 连接已关闭")
                         break
 
-                    buffer.extend(data)
+                    # 使用 CodecContext.parse 解析 H.264 数据
+                    packets = decoder.parse(data)
+                    print(f"收到原始数据长度: {len(data)}, 解析出 packet 数量: {len(packets)}")
 
-                    # 处理完整帧
-                    while len(buffer) >= self._frame_size:
-                        # 提取 I420 数据
-                        i420_data = bytes(buffer[:self._frame_size])
-                        buffer = buffer[self._frame_size:]
-
+                    for packet in packets:
                         try:
-                            # 转换为 VideoFrame
-                            video_frame = self._i420_bytes_to_videoframe(i420_data, self.width, self.height)
+                            for frame in decoder.decode(packet):
+                                frame_rgb = frame.reformat(format='rgb24')
+                                video_frame = VideoFrame.from_ndarray(
+                                    frame_rgb.to_ndarray(),
+                                    format='rgb24'
+                                )
+                                video_frame.pts = int(time.time() * 90000)
+                                video_frame.time_base = fractions.Fraction(1, 90000)
 
-                            # 放入队列
-                            self._queue.put_nowait(video_frame)
+                                # 队列 maxsize=1：只保留最新帧
+                                if self._queue.full():
+                                    try:
+                                        self._queue.get_nowait()
+                                        dropped_frames += 1
+                                    except asyncio.QueueEmpty:
+                                        pass
 
-                            frame_count += 1
-                            # 关键验证日志：每收到一帧就打印
-                            print(f"🔥 [RTSP 接流] 成功读取真实画面帧 #{frame_count}")
+                                enqueue_ts = time.time()
+                                self._queue.put_nowait((video_frame, enqueue_ts))
+
+                                frame_count += 1
+                                if frame_count % 30 == 0:
+                                    print(f"🔥 [RTSP 接流] 帧 #{frame_count}, 丢弃 {dropped_frames} 帧")
 
                         except Exception as e:
-                            print(f"[错误] 处理帧: {e}")
-                            import traceback
-                            traceback.print_exc()
+                            if "Invalid data" not in str(e):
+                                print(f"[警告] 解码失败: {e}")
 
                 except Exception as e:
                     print(f"[错误] 读取 TCP: {e}")
@@ -242,28 +275,7 @@ class GStreamerVideoTrack(MediaStreamTrack):
                 self._queue.put_nowait(None)
             except:
                 pass
-            print(f"[统计] 总共接收 {frame_count} 帧（真实相机画面）")
-
-    def _i420_bytes_to_videoframe(self, i420_data: bytes, width: int, height: int) -> VideoFrame:
-        """将 I420 字节数据转换为 VideoFrame"""
-        frame = VideoFrame(width=width, height=height, format="yuv420p")
-
-        y_size = width * height
-        uv_size = y_size // 4
-
-        # Y 平面
-        frame.planes[0].update(i420_data[:y_size])
-
-        # U 平面
-        frame.planes[1].update(i420_data[y_size:y_size + uv_size])
-
-        # V 平面
-        frame.planes[2].update(i420_data[y_size + uv_size:y_size + 2 * uv_size])
-
-        frame.pts = int(time.time() * 90000)
-        frame.time_base = fractions.Fraction(1, 90000)
-
-        return frame
+            print(f"[统计] 总共接收 {frame_count} 帧，丢弃 {dropped_frames} 帧（H.264 压缩流）")
 
     async def _monitor_process(self):
         """监控 GStreamer 进程状态"""
@@ -292,13 +304,20 @@ class GStreamerVideoTrack(MediaStreamTrack):
     async def recv(self):
         """接收下一帧"""
         try:
-            frame = await asyncio.wait_for(self._queue.get(), timeout=1.0)
+            frame_item = await asyncio.wait_for(self._queue.get(), timeout=1.0)
 
-            if frame is None:
+            if frame_item is None:
                 raise Exception("Video stream ended")
 
+            frame, enqueue_ts = frame_item
             frame.pts = int(time.time() * 90000)
             frame.time_base = fractions.Fraction(1, 90000)
+
+            # 延迟统计：每 30 帧打印一次（可调整）
+            self._recv_count += 1
+            if self._recv_count % self._latency_log_interval == 0:
+                latency_ms = (time.time() - enqueue_ts) * 1000
+                print(f"📊 [延迟统计] 队列等待: {latency_ms:.1f}ms (每 {self._latency_log_interval} 帧)")
 
             return frame
 

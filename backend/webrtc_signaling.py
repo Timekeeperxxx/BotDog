@@ -10,6 +10,10 @@ WebRTC 信令处理器。
 
 import asyncio
 import logging
+<<<<<<< HEAD
+=======
+import re
+>>>>>>> 3f5cc87 (feat: H.264 compressed streaming architecture)
 import uuid
 from typing import Any, Callable, Dict, Optional
 
@@ -168,11 +172,20 @@ class WebRTCPeerConnection:
         else:
             logger.warning(f"ICE 收集超时: {self.client_id}, 当前 {len(self._ice_candidates)} 个候选")
 
+<<<<<<< HEAD
         # 修改 SDP：强制使用 H.264 baseline profile + 提升码率
         sdp = self.pc.localDescription.sdp
         sdp = self._force_h264_baseline(sdp)
         sdp = self._boost_video_bitrate(sdp)
         logger.info(f"✅ 已强制 SDP 使用 H.264 baseline profile")
+=======
+        # 修改 SDP：强制使用 H.264 baseline profile + 仅保留 H.264 + 提升码率
+        sdp = self.pc.localDescription.sdp
+        sdp = self._force_h264_baseline(sdp)
+        sdp = self._force_h264_only(sdp)
+        sdp = self._boost_video_bitrate(sdp)
+        logger.info("✅ 已强制 SDP 仅使用 H.264 baseline profile")
+>>>>>>> 3f5cc87 (feat: H.264 compressed streaming architecture)
         logger.info(f"✅ 已提升视频码率至高质量（{settings.VIDEO_BITRATE//1000000}Mbps）")
 
         return sdp
@@ -193,16 +206,96 @@ class WebRTCPeerConnection:
         for line in lines:
             # 修改 H.264 profile-level-id 为 42e01f (baseline profile)
             if 'profile-level-id' in line and 'H264' in sdp:
+<<<<<<< HEAD
                 # 替换为 baseline profile (42e01f)
                 line = line.replace('profile-level-id=[0-9a-f]{6}', 'profile-level-id=42e01f')
                 # 确保使用 baseline profile
                 line = line.replace('profile-level-id=4d001f', 'profile-level-id=42e01f')  # high -> baseline
                 line = line.replace('profile-level-id=64001f', 'profile-level-id=42e01f')  # high444 -> baseline
+=======
+                # 使用正则替换所有 profile-level-id=xxxxxx 格式
+                line = re.sub(r'profile-level-id=[0-9a-f]{6}', 'profile-level-id=42e01f', line)
+>>>>>>> 3f5cc87 (feat: H.264 compressed streaming architecture)
 
             modified_lines.append(line)
 
         return '\n'.join(modified_lines)
 
+<<<<<<< HEAD
+=======
+    def _force_h264_only(self, sdp: str) -> str:
+        """
+        修改 SDP，仅保留 H.264，禁用 VP8/VP9 等软解码器。
+
+        Args:
+            sdp: 原始 SDP
+
+        Returns:
+            修改后的 SDP（仅 H.264）
+        """
+        lines = sdp.split('\n')
+        modified_lines = []
+        allowed_payloads: set[int] = set()
+
+        # 收集 H.264 payload type（数字形式）
+        for line in lines:
+            if line.startswith('a=rtpmap:') and 'H264' in line:
+                # 格式: a=rtpmap:96 H264/90000
+                try:
+                    payload = int(line.split(':', 1)[1].split(' ', 1)[0])
+                    allowed_payloads.add(payload)
+                    logger.info(f"✅ 找到 H.264 payload: {payload}")
+                except (ValueError, IndexError):
+                    pass
+
+        logger.info(f"📋 允许的 H.264 payload: {allowed_payloads}")
+
+        # 如果没有找到 H.264，返回原 SDP（避免破坏）
+        if not allowed_payloads:
+            logger.warning("⚠️ SDP 中没有 H.264，返回原始 SDP")
+            return sdp
+
+        for line in lines:
+            # 过滤视频 m= 行，只保留 H.264 payload
+            if line.startswith('m=video'):
+                parts = line.split(' ')
+                # m=video <port> <proto> <payloads...>
+                base = parts[:3]
+                payloads = []
+                for p in parts[3:]:
+                    try:
+                        if int(p) in allowed_payloads:
+                            payloads.append(p)
+                    except ValueError:
+                        payloads.append(p)  # 保留非数字部分
+
+                if payloads:
+                    line = ' '.join(base + payloads)
+                    logger.info(f"✅ 视频 m 行已更新: {line}")
+                else:
+                    logger.warning("⚠️ 过滤后没有有效 payload，保留原行")
+                    # 保留原行，避免破坏
+                    modified_lines.append(line)
+                    continue
+
+            # 过滤非 H.264 的 rtpmap/fmtp/rtcp-fb
+            if line.startswith('a=rtpmap:') or line.startswith('a=fmtp:') or line.startswith('a=rtcp-fb:'):
+                try:
+                    # 格式: a=rtpmap:96 H264/90000 或 a=fmtp:96 profile-level-id=...
+                    payload_str = line.split(':', 1)[1].split(' ')[0]
+                    payload = int(payload_str)
+                    if payload not in allowed_payloads:
+                        continue  # 跳过非 H.264 的行
+                except (ValueError, IndexError):
+                    pass  # 保留无法解析的行
+
+            modified_lines.append(line)
+
+        result = '\n'.join(modified_lines)
+        logger.info(f"✅ SDP 已强制为 H.264 only")
+        return result
+
+>>>>>>> 3f5cc87 (feat: H.264 compressed streaming architecture)
     def _boost_video_bitrate(self, sdp: str) -> str:
         """
         提升 SDP 中的视频码率设置，改善快速转动时的画质

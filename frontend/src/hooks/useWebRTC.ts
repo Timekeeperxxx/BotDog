@@ -102,6 +102,24 @@ export function useWebRTC(
     // 远程流回调
     pc.ontrack = (event) => {
       console.log("接收到远程流:", event.streams[0]);
+
+      // 低延迟提示：尽量减少接收端播放缓冲
+      try {
+        if ((event.receiver as any)?.playoutDelayHint !== undefined) {
+          (event.receiver as any).playoutDelayHint = 0;
+        }
+      } catch (err) {
+        console.debug("playoutDelayHint not supported on receiver", err);
+      }
+
+      try {
+        if ((event.track as any)?.playoutDelayHint !== undefined) {
+          (event.track as any).playoutDelayHint = 0;
+        }
+      } catch (err) {
+        console.debug("playoutDelayHint not supported on track", err);
+      }
+
       if (videoRef.current) {
         remoteStreamRef.current = event.streams[0];
         videoRef.current.srcObject = event.streams[0];

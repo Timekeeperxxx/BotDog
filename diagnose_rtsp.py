@@ -7,11 +7,13 @@ import subprocess
 import sys
 import time
 
+from backend.config import settings
+
 print("=" * 80)
 print("RTSP 连接诊断")
 print("=" * 80)
 
-rtsp_url = "rtsp://192.168.144.25:8554/main.264"
+rtsp_url = settings.CAMERA_RTSP_URL
 
 print(f"\n测试 RTSP URL: {rtsp_url}")
 print("\n[1] 使用 ffprobe 检查 RTSP 流...")
@@ -104,7 +106,7 @@ except Exception as e:
 print("\n" + "=" * 80)
 print("建议的 RTSP URLs:")
 print("=" * 80)
-print("1. rtsp://192.168.144.25:8554/main.264")
+print(f"1. {settings.CAMERA_RTSP_URL} (当前配置)")
 print("2. rtsp://192.168.144.25:8554/h264")
 print("3. rtsp://192.168.144.25:8554/stream")
 print("4. rtsp://192.168.144.25:554/stream")

@@ -60,6 +60,12 @@ class Settings(BaseSettings):
     VIDEO_FRAMERATE: int = 30  # 帧率（降低到 30fps 以兼容更多相机）
     VIDEO_UDP_PORT: int = 19856  # UDP 视频接收端口（图传端口）
 
+    # 视频延迟优化配置（超低延迟优化）
+    VIDEO_RTSP_LATENCY_MS: int = 30  # RTSP rtspsrc 缓冲延迟（毫秒），LAN 推荐 20-50ms
+    VIDEO_RTP_JITTER_MS: int = 0  # RTP jitterbuffer 延迟（毫秒），0=禁用（rtspsrc 自带 buffer，避免双重缓冲）
+    VIDEO_QUEUE_MAXSIZE: int = 1  # Python 队列最大帧数，极限低延迟
+    VIDEO_LATENCY_PRESET: str = "low"  # 延迟预设：stable(100/100/30), low(50/0/15), ultralow(20/0/10)
+
     # UDP 视频流转发器配置（已禁用 - video_track_native 直接监听 UDP）
     UDP_RELAY_ENABLED: bool = False  # 禁用 UDP 转发器
     UDP_RELAY_LISTEN_PORT: int = 5000  # 转发器监听端口（边缘端推送到此端口）
