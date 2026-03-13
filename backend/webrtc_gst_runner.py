@@ -40,8 +40,8 @@ class WebRTCClient:
 
     def _build_pipeline_h264(self) -> str:
         decoder = "qsvh265dec" if self.use_qsv else "avdec_h265"
-        encoder = "qsvh264enc bitrate=3000 gop-size=15 rate-control=cbr usage-compliant=true" if self.use_qsv else (
-            "x264enc tune=zerolatency speed-preset=ultrafast bitrate=3000 key-int-max=30 bframes=0"
+        encoder = "qsvh264enc bitrate=3000 gop-size=1 rate-control=cbr usage-compliant=true" if self.use_qsv else (
+            "x264enc tune=zerolatency speed-preset=ultrafast bitrate=3000 key-int-max=1 bframes=0"
         )
 
         return (
@@ -60,19 +60,21 @@ class WebRTCClient:
     def start_pipeline(self) -> None:
         # 1. 极简管线：只保留核心转码部分
         # 暂时去掉所有可能导致崩溃的复杂属性（如 bundle-policy）
-        decoder = "qsvh265dec" if self.use_qsv else "avdec_h265"
-        encoder = "qsvh264enc bitrate=3000" if self.use_qsv else (
-            "x264enc tune=zerolatency speed-preset=ultrafast bitrate=3000 key-int-max=30 bframes=0"
-        )
+        decoder = "qsvh265dec"
+        encoder = "qsvh264enc bitrate=8000 rate-control=cbr gop-size=30 b-frames=0"
 
         pipeline_str = (
             "webrtcbin name=sendrecv "
             f"rtspsrc location={self.rtsp_url} latency=0 protocols=tcp ! "
-            "rtph265depay ! h265parse ! queue max-size-buffers=1 leaky=downstream ! "
-            f"{decoder} ! videoconvert ! video/x-raw,format=I420 ! "
-            f"{encoder} ! h264parse config-interval=1 ! "
-            "rtph264pay config-interval=1 pt=96 ! "
-            "capsfilter name=filter caps=\"application/x-rtp,media=(string)video,encoding-name=(string)H264,payload=(int)96,clock-rate=(int)90000\""
+            "rtph265depay ! "
+            "h265parse ! "
+            "queue max-size-buffers=1 leaky=downstream ! "
+            f"{decoder} ! "
+            "video/x-raw,format=NV12 ! "
+            f"{encoder} ! "
+            "h264parse config-interval=1 ! "
+            "rtph264pay aggregate-mode=zero-latency pt=96 config-interval=1 ! "
+            "capsfilter name=filter caps=\"application/x-rtp,media=video,encoding-name=H264,payload=96\""
         )
 
         print("[GST] 正在以‘安全模式’初始化管线...")

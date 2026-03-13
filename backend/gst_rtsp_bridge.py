@@ -22,7 +22,7 @@ class GstRtspBridge:
     def _build_pipeline(self, use_qsv: bool) -> str:
         if use_qsv:
             decoder = "qsvh265dec"
-            encoder = "qsvh264enc bitrate=5000 gop-size=15 rate-control=cbr"
+            encoder = "qsvh264enc bitrate=5000 rate-control=vbr target-usage=1 gop-size=1 b-frames=0"
         else:
             decoder = "avdec_h265"
             encoder = "x264enc tune=zerolatency speed-preset=superfast bitrate=12000 key-int-max=30 bframes=0"
