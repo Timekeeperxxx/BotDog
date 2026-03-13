@@ -69,7 +69,7 @@ class Settings(BaseSettings):
 
     # UDP 视频流转发器配置（已禁用 - video_track_native 直接监听 UDP）
     UDP_RELAY_ENABLED: bool = True  # 启用 UDP 转发器
-    UDP_RELAY_LISTEN_PORT: int = 5000  # 转发器监听端口（边缘端推送到此端口）
+    UDP_RELAY_LISTEN_PORT: int = 19856  # 转发器监听端口（边缘端推送到此端口）
     UDP_RELAY_BIND_ADDRESS: str = "192.168.144.30"  # 转发器绑定地址
     UDP_RELAY_TARGET_ADDRESS: str = "127.0.0.1"  # 转发目标地址（本地 WebRTC）
     UDP_RELAY_BUFFER_SIZE: int = 65536  # UDP 缓冲区大小（字节）
@@ -83,7 +83,7 @@ class Settings(BaseSettings):
     HARDWARE_INTERFACE: str = "ens33"  # 硬件网卡名称（用于图传连接）
 
     # WebRTC 配置
-    VIDEO_BACKEND_MODE: str = "webrtcbin"  # aiortc | webrtcbin
+    VIDEO_BACKEND_MODE: str = "aiortc"  # aiortc | webrtcbin
     WEBRTC_GST_WS_PATH: str = "/ws/webrtc-gst"  # webrtcbin runner 连接入口
     WEBRTC_ICE_SERVERS: list[str] = ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"]  # STUN/TURN 服务器列表
 

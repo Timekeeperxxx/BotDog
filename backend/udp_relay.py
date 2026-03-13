@@ -281,15 +281,15 @@ class UDPRelay:
                 await asyncio.sleep(self.stats_interval)
                 if self.stats:
                     summary = self.stats.get_summary()
-                    logger.info(
-                        f"UDP 转发统计: "
-                        f"接收 {summary['packets_received']} 包, "
-                        f"转发 {summary['packets_sent']} 包, "
-                        f"丢失 {summary['packets_dropped']} 包 "
-                        f"({summary['packet_loss_rate']}%), "
-                        f"延迟 {summary['avg_latency_ms']}ms, "
-                        f"带宽 {summary['bandwidth_mbps']}Mbps"
-                    )
+                    # logger.info(
+                    #     f"UDP 转发统计: "
+                    #     f"接收 {summary['packets_received']} 包, "
+                    #     f"转发 {summary['packets_sent']} 包, "
+                    #     f"丢失 {summary['packets_dropped']} 包 "
+                    #     f"({summary['packet_loss_rate']}%), "
+                    #     f"延迟 {summary['avg_latency_ms']}ms, "
+                    #     f"带宽 {summary['bandwidth_mbps']}Mbps"
+                    # )
             except asyncio.CancelledError:
                 break
 
