@@ -11,7 +11,7 @@
 - uvicorn（ASGI 服务器）
 - websockets（WebSocket 支持）
 - Pydantic（数据验证）
-- GStreamer / webrtcbin（视频管线）
+- GStreamer / webrtcbin / aiortc（视频管线）
 
 ## 环境配置
 
@@ -66,6 +66,7 @@ SIMULATION_WORKER_ENABLED=true
 # 视频后端模式（aiortc | webrtcbin）
 VIDEO_BACKEND_MODE=webrtcbin
 WEBRTC_GST_WS_PATH=/ws/webrtc-gst
+# 启动日志会输出 Video backend mode
 
 # 相机 RTSP
 CAMERA_RTSP_URL=rtsp://192.168.144.25:8554/main.264
@@ -497,7 +498,7 @@ aiortc==1.6.0
 
 ### webrtcbin 直出模式（WSL2 可选）
 
-1. `.env` 中启用：`VIDEO_BACKEND_MODE=webrtcbin`（可回退为 `aiortc`）。
+1. `.env` 中启用：`VIDEO_BACKEND_MODE=webrtcbin`（可回退为 `aiortc`，启动日志会打印当前模式）。
 2. Windows 后端保持运行（`uvicorn backend.main:app --host 0.0.0.0 --port 8000`）。
 3. WSL2 启动 runner：
 

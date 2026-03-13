@@ -62,6 +62,13 @@ src/
 - ✅ 响应式布局设计
 - ✅ 深色工业控制台主题
 
+## 后端地址配置
+
+后端地址目前固定在 [frontend/src/config/api.ts](frontend/src/config/api.ts) 的 `API_BASE_URL`。
+如需修改，请直接编辑该文件。
+
+> `frontend/.env` 中的 `VITE_API_BASE_URL` 目前未接入，仅作预留。
+
 ## WebSocket 连接
 
 ### 遥测 WebSocket
