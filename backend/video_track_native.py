@@ -81,11 +81,14 @@ class GStreamerVideoTrack(MediaStreamTrack):
         # 目标：1080P 压缩传输，降低操作反馈延迟
         pipeline = (
             f'gst-launch-1.0 -q -e '
-            f'rtspsrc location={self.rtsp_url} latency={settings.VIDEO_RTSP_LATENCY_MS} drop-on-latency=true '
-            f'! decodebin '
+            f'rtspsrc location={self.rtsp_url} latency=50 protocols=udp drop-on-latency=true '
+            f'! rtpjitterbuffer latency=20 '
+            f'! rtph265depay '
+            f'! h265parse '
+            f'! qsvh265dec '
             f'! videoconvert '
             f'! video/x-raw,format=I420,width={self.width},height={self.height},framerate={self.framerate}/1 '
-            f'! x264enc tune=zerolatency speed-preset=ultrafast bitrate=5000 key-int-max=30 '
+            f'! x264enc tune=zerolatency speed-preset=ultrafast bitrate=8000 key-int-max=15 bframes=0 rc-lookahead=0 '
             f'! h264parse config-interval=1 '
             f'! video/x-h264,stream-format=byte-stream '
             f'! tcpserversink host=127.0.0.1 port={self.tcp_port} sync=false'

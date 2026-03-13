@@ -186,33 +186,29 @@ export function useWebRTC(
               const pc = createPeerConnection();
               pcRef.current = pc;
               pc.addTransceiver("video", { direction: "recvonly" });
-
-              // 创建 SDP offer
-              const offer = await pc.createOffer();
-              await pc.setLocalDescription(offer);
-
-              // 发送 offer
-              if (wsRef.current?.readyState === WebSocket.OPEN) {
-                wsRef.current.send(JSON.stringify({
-                  msg_type: "offer",
-                  payload: {
-                    sdp: pc.localDescription?.sdp,
-                    type: "offer",
-                  },
-                }));
-              }
               break;
 
-            case "answer":
-              // 接收到 SDP answer
+            case "offer":
               if (pcRef.current && message.payload?.sdp) {
                 await pcRef.current.setRemoteDescription(
                   new RTCSessionDescription({
                     sdp: message.payload.sdp,
-                    type: "answer",
+                    type: "offer",
                   })
                 );
-                console.log("已设置远程描述（answer）");
+
+                const answer = await pcRef.current.createAnswer();
+                await pcRef.current.setLocalDescription(answer);
+
+                if (wsRef.current?.readyState === WebSocket.OPEN) {
+                  wsRef.current.send(JSON.stringify({
+                    msg_type: "answer",
+                    payload: {
+                      sdp: pcRef.current.localDescription?.sdp,
+                      type: "answer",
+                    },
+                  }));
+                }
               }
               break;
 

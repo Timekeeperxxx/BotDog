@@ -82,6 +82,8 @@ class Settings(BaseSettings):
     HARDWARE_INTERFACE: str = "ens33"  # 硬件网卡名称（用于图传连接）
 
     # WebRTC 配置
+    VIDEO_BACKEND_MODE: str = "aiortc"  # aiortc | webrtcbin
+    WEBRTC_GST_WS_PATH: str = "/ws/webrtc-gst"  # webrtcbin runner 连接入口
     WEBRTC_ICE_SERVERS: list[str] = ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"]  # STUN/TURN 服务器列表
 
     # 阶段 4：AI 告警配置

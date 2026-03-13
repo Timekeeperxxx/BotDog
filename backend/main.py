@@ -453,6 +453,22 @@ def register_routes(app: FastAPI) -> None:
         print(f"✅ 开始处理 WebRTC 连接...")
         await _webrtc_signaling.handle_connection(websocket)
 
+    @app.websocket(settings.WEBRTC_GST_WS_PATH)
+    async def webrtc_gst_ws(websocket: WebSocket) -> None:
+        """
+        webrtcbin runner 信令端点（WSL2）。
+
+        功能：
+        - 接受 webrtcbin runner 连接
+        - 转发 SDP answer / ICE 到浏览器
+        """
+
+        if _webrtc_signaling is None:
+            await websocket.close(code=1011, reason="WebRTC 信令服务未初始化")
+            return
+
+        await _webrtc_signaling.handle_gst_connection(websocket)
+
     @app.websocket("/ws/event")
     async def event_ws(websocket: WebSocket) -> None:
         """
