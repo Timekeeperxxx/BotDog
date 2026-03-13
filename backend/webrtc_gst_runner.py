@@ -156,7 +156,10 @@ class WebRTCClient:
                 asyncio.create_task, self._ws.send(json.dumps(payload))
             )
 
-    async def _send_answer(self, answer: GstWebRTC.WebRTCSessionDescription) -> None:
+    async def _send_answer(self, answer: GstWebRTC.WebRTCSessionDescription | None) -> None:
+        if not answer or not answer.sdp:
+            print("[GST] SDP answer 为空，已忽略")
+            return
         sdp_text = answer.sdp.as_text()
         await self._ws.send(
             json.dumps({"msg_type": "answer", "payload": {"sdp": sdp_text, "type": "answer"}})
@@ -168,6 +171,9 @@ class WebRTCClient:
 
         reply = promise.get_reply()
         answer = reply.get_value("answer")
+        if not answer:
+            print("[GST] 未获取到 SDP answer")
+            return
         self._webrtcbin.emit("set-local-description", answer, Gst.Promise.new())
         if self._async_loop:
             self._async_loop.call_soon_threadsafe(
