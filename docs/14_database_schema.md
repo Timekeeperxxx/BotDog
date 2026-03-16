@@ -144,7 +144,7 @@
 
 - `thermal_threshold=60.0 (float, hot)`
 - `heartbeat_timeout=3.0 (float)`
-- `control_rate_limit_hz=20 (int, hot)`
+- `control_rate_limit_hz` 已废弃（FT24 直连后不再使用）。
 - `ws_max_clients_per_ip=5 (int)`
 - `video_watchdog_timeout_s=2.0 (float, hot)`
 - `ui_alert_ack_timeout_s=60 (int, hot)`

@@ -1,13 +1,11 @@
 /**
  * BotDog 机器狗控制终端 - 完整集成版本
- * 包含完整的前后端交互、WebSocket连接和WebRTC视频流
+ * 包含完整的前后端交互、WebSocket连接和WHEP视频流
  */
 
 import { useState, useEffect } from 'react';
 import { useBotDogWebSocket } from './hooks/useBotDogWebSocket';
-import { useWebRTCVideo } from './hooks/useWebRTCVideo';
-import { SnapshotList } from './components/SnapshotList';
-import { ControlPanel } from './components/ControlPanel';
+import { useWhepVideo } from './hooks/useWhepVideo';
 import { ConfigPanel } from './components/ConfigPanel';
 
 // ==================== 顶部状态栏 ====================
@@ -186,8 +184,6 @@ function LeftPanel({ snapshots }: { snapshots: any[] }) {
       flexDirection: 'column',
       gap: '16px',
     }}>
-      {/* 使用 SnapshotList 组件 */}
-      <SnapshotList maxItems={50} autoScroll={true} />
     </aside>
   );
 }
@@ -198,7 +194,7 @@ function VideoSection({
   groundspeed,
   isFullscreen,
   videoRef,
-  webrtcStatus,
+  whepStatus,
   isConnected
 }: {
   attitude?: { pitch: number; roll: number; yaw: number };
@@ -206,7 +202,7 @@ function VideoSection({
   groundspeed?: number;
   isFullscreen: boolean;
   videoRef: React.RefObject<HTMLVideoElement | null>;
-  webrtcStatus: { status: string; error: string | null };
+  whepStatus: { status: string; error: string | null };
   isConnected: boolean;
 }) {
   const getHeadingDisplay = () => {
@@ -220,14 +216,14 @@ function VideoSection({
   const alt = altitude || 1.2;
   const speed = groundspeed || 0.8;
 
-  const webrtcConfig: any = {
+  const whepConfig: any = {
     'disconnected': { color: '#ef4444', text: '未连接' },
     'connecting': { color: '#f59e0b', text: '连接中...' },
     'connected': { color: '#10b981', text: '已连接' },
-    'error': { color: '#ef4444', text: webrtcStatus.error || '错误' },
+    'error': { color: '#ef4444', text: whepStatus.error || '错误' },
   };
 
-  const currentWebrtcStatus = webrtcConfig[webrtcStatus.status as keyof typeof webrtcConfig] || webrtcConfig.disconnected;
+  const currentWhepStatus = whepConfig[whepStatus.status as keyof typeof whepConfig] || whepConfig.disconnected;
 
   return (
     <section style={isFullscreen ? {
@@ -264,7 +260,7 @@ function VideoSection({
         }}
       />
 
-      {webrtcStatus.status !== 'connected' && (
+      {whepStatus.status !== 'connected' && (
         <div style={{
           position: 'absolute',
           top: 0,
@@ -280,9 +276,9 @@ function VideoSection({
         }}>
           <div style={{ fontSize: '48px', marginBottom: '1rem', opacity: 0.5 }}>📹</div>
           <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#e2e8f0', marginBottom: '0.5rem' }}>
-            视频流 {currentWebrtcStatus.text}
+            视频流 {currentWhepStatus.text}
           </div>
-          {webrtcStatus.error && (
+          {whepStatus.error && (
             <div style={{
               fontSize: '14px',
               color: '#ef4444',
@@ -291,11 +287,11 @@ function VideoSection({
               background: 'rgba(239, 68, 68, 0.1)',
               borderRadius: '4px',
             }}>
-              {webrtcStatus.error}
+              {whepStatus.error}
             </div>
           )}
           <div style={{ fontSize: '12px', color: '#64748b' }}>
-            {isConnected ? '等待WebRTC连接...' : '等待后端连接...'}
+            {isConnected ? '等待WHEP连接...' : '等待后端连接...'}
           </div>
         </div>
       )}
@@ -317,17 +313,21 @@ function VideoSection({
           fontWeight: 'bold',
           border: `1px solid rgba(59, 130, 246, 0.3)`,
         }}>
-          4K 实时流
+          {(() => {
+            const width = Number(import.meta.env.VITE_STREAM_WIDTH || 1920);
+            const label = width === 1280 ? '720p' : '1080p';
+            return `${label} 实时流`;
+          })()}
         </div>
         <div style={{
           background: 'rgba(255, 255, 255, 0.05)',
-          color: currentWebrtcStatus.color,
+          color: currentWhepStatus.color,
           padding: '4px 8px',
           borderRadius: '4px',
           fontSize: '9px',
           fontWeight: 'bold',
         }}>
-          {currentWebrtcStatus.text}
+          {currentWhepStatus.text}
         </div>
         {isFullscreen && (
           <div style={{
@@ -481,9 +481,6 @@ function RightPanel({
       flexDirection: 'column',
       gap: '16px',
     }}>
-      {/* 控制面板 */}
-      <ControlPanel />
-
       <div style={{
         background: 'rgba(26, 29, 35, 0.9)',
         border: '1px solid rgba(255, 255, 255, 0.05)',
@@ -618,7 +615,7 @@ export default function IndustrialConsoleComplete() {
     disconnect: disconnectWs,
   } = useBotDogWebSocket();
 
-  const { status: webrtcStatus, videoRef, connect: connectWebRTC, disconnect: disconnectWebRTC } = useWebRTCVideo();
+  const { status: whepStatus, videoRef, connect: connectWhep, disconnect: disconnectWhep } = useWhepVideo();
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showConfigPanel, setShowConfigPanel] = useState(false);
@@ -630,11 +627,11 @@ export default function IndustrialConsoleComplete() {
     };
   }, []);
 
-  // WebRTC 连接与遥测连接解耦，独立尝试连接
+  // WHEP 连接与遥测连接解耦，独立尝试连接
   useEffect(() => {
-    connectWebRTC();
+    connectWhep();
     return () => {
-      disconnectWebRTC();
+      disconnectWhep();
     };
   }, []);
 
@@ -712,7 +709,7 @@ export default function IndustrialConsoleComplete() {
           groundspeed={telemetry?.position.groundspeed}
           isFullscreen={isFullscreen}
           videoRef={videoRef}
-          webrtcStatus={webrtcStatus}
+          whepStatus={whepStatus}
           isConnected={isConnected}
         />
         <RightPanel

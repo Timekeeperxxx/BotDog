@@ -4,8 +4,8 @@
 
 * ​**核心**​: `React 18` + `Vite` + `TypeScript` (强类型约束，确保遥测数据解析一致性)。
 * ​**状态**​: `Zustand` (高频遥测数据流轻量化管理，避免渲染瓶颈)。
-* ​**渲染**​: `WebRTC` (低延迟视频) + `OffscreenCanvas` (HUD 独立线程渲染)。
-* ​**通讯**​: 原生 `WebSocket`（与后端 `/ws/telemetry`、`/ws/control`、`/ws/event` 保持一致；前端自行封装重连/心跳即可）。
+* ​**渲染**​: `MediaMTX + WHEP` (低延迟视频) + `OffscreenCanvas` (HUD 独立线程渲染)。
+* ​**通讯**​: 原生 `WebSocket`（`/ws/telemetry`、`/ws/event`），前端自行封装重连/心跳。
 
 ## 2. 后端 (Middleware)
 
@@ -15,14 +15,13 @@
 
 ## 3. 流媒体 (Media Pipeline)
 
-* ​**框架**​: `GStreamer 1.22+` (工业级多路流处理引擎)。
-* ​**插件**​: `v4l2src` (采集), `x264enc` (硬编), `webrtcbin` (推流)。
+* ​**框架**​: `MediaMTX` (WHEP 分发) + `FFmpeg` (RTSP 拉流与转码)。
 * ​**视觉**​: `ONNX Runtime` (轻量化端侧推断，实现实时人影检测)。
 
 ## 4. 协议与通讯 (Protocols)
 
 * ​**控制**​: `MAVLink 2.0` (标准无人系统协议，支持 CRC 校验)。
-* ​**视频**​: `RTP/RTCP over UDP` (牺牲可靠性换取极致实时性)。
+* ​**视频**​: `WHEP (DTLS/SRTP)` (低延迟、安全传输)。
 * ​**接口**​: `PySerial` (底层串口通讯驱动)。
 
 ## 5. 机器狗本体 (Edge/Embedded)

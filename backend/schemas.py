@@ -7,7 +7,7 @@ Pydantic 模型层（I/O 契约）。
 """
 
 from datetime import datetime
-from typing import Optional, Literal, Any
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -120,31 +120,4 @@ class EStopResetResponse(BaseModel):
     state_after: str = Field(..., description="重置后的系统状态")
 
 
-# 阶段 3：WebRTC 视频流相关 DTO
-
-
-class WebRTCSignalingMessage(BaseModel):
-    """
-    WebRTC 信令消息。
-
-    用于 SDP/ICE 候选交换。
-    """
-    msg_type: Literal["offer", "answer", "ice_candidate"] = Field(
-        ..., description="消息类型"
-    )
-    payload: dict[str, Any] = Field(..., description="载荷数据")
-
-
-class VideoStatusDTO(BaseModel):
-    """
-    视频流状态数据传输对象。
-    """
-    status: Literal["connected", "disconnected", "error"] = Field(
-        ..., description="连接状态"
-    )
-    client_id: str = Field(..., description="客户端 ID")
-    resolution: Optional[str] = Field(None, description="视频分辨率")
-    bitrate: Optional[int] = Field(None, description="码率（bps）")
-    framerate: Optional[int] = Field(None, description="帧率")
-    error: Optional[str] = Field(None, description="错误信息")
 

@@ -17,21 +17,21 @@
 
 | 功能模块 | 验证方法 | 预期结果 |
 |---------|---------|---------|
-| **前端界面** | 访问 http://localhost:5173 | 界面正常显示 |
-| **控制面板** | 点击"启用控制"，使用键盘/手柄 | 控制指令发送成功 |
-| **游戏手柄** | 连接 USB 手柄，测试摇杆 | 输入正常响应 |
+| **前端界面** | 访问 http://localhost:5174 | 界面正常显示 |
+| **控制链路** | FT24 硬件直连 | Web 控制已下线 |
+| **控制链路** | FT24 硬件直连 | Web 控制已下线 |
 | **配置管理** | 打开"⚙️ 配置"面板 | 13 个配置项可修改 |
 | **遥测显示** | 观察姿态、位置、温度显示 | 模拟数据正常更新 |
 | **AI 告警** | 修改 `thermal_threshold` 触发告警 | 告警弹窗出现 |
 | **事件系统** | 观察事件列表 | 实时事件记录 |
-| **WebSocket 连接** | 打开浏览器控制台 | 三个 WebSocket 连接成功 |
+| **WebSocket 连接** | 打开浏览器控制台 | 遥测/事件 WebSocket 连接成功 |
 | **数据库** | 检查 `data/botdog.db` | 数据正常存储 |
 
 ### ⚠️ 需要摄像头硬件
 
 | 功能模块 | 验证方法 | 预期结果 |
 |---------|---------|---------|
-| **WebRTC 视频流** | 配置真实摄像头，点击"连接视频" | 视频流正常显示 |
+| **WHEP 视频流** | 配置真实摄像头，打开 WHEP 播放 | 视频流正常显示 |
 
 ### ❌ 需要机器狗（不可验证）
 
@@ -65,13 +65,12 @@ npm run dev
 
 ### 第二步：验证前端界面
 
-1. 打开浏览器访问：`http://localhost:5173`
+1. 打开浏览器访问：`http://localhost:5174`
 2. 检查界面是否正常显示
 3. 打开浏览器控制台（F12），检查 WebSocket 连接：
    ```javascript
-   // 应该看到三个 WebSocket 连接
+   // 应该看到两个 WebSocket 连接
    // ws://localhost:8000/ws/telemetry
-   // ws://localhost:8000/ws/control
    // ws://localhost:8000/ws/event
    ```
 
@@ -89,27 +88,10 @@ npm run dev
 # "MAVLink 网关启动，数据源: simulation"
 ```
 
-### 第四步：验证控制功能
+### 第四步：控制链路说明
 
-**键盘控制测试**：
-1. 点击"启用控制"按钮
-2. 按下键盘按键：
-   - W/S: 前进/后退
-   - A/D: 左右平移
-   - Q/E: 升降
-   - ←/→: 转向
-3. 打开浏览器控制台，查看网络请求：
-   ```javascript
-   // 应该看到控制指令发送
-   // POST /api/v1/control/manual
-   ```
+控制链路已切换为 FT24 硬件直连，Web 控制面板与控制指令发送已下线。
 
-**游戏手柄测试**（如果有）：
-1. 连接 USB 手柄（Xbox/PlayStation）
-2. 打开浏览器
-3. **按下手柄上任意按钮**（激活 Gamepad API）
-4. 点击"启用控制"
-5. 移动摇杆，观察控制面板输入显示
 
 ### 第五步：验证 AI 告警功能
 
@@ -131,10 +113,9 @@ npm run dev
 
 **测试所有配置类别**：
 1. 打开配置面板
-2. 测试 **后端配置**（5 项）：
+2. 测试 **后端配置**（4 项）：
    - `thermal_threshold`: 修改高温阈值
    - `heartbeat_timeout`: 修改心跳超时
-   - `control_rate_limit_hz`: 修改控制速率限制
    - `ws_max_clients_per_ip`: 修改连接数限制
    - `video_watchdog_timeout_s`: 修改视频超时
 
@@ -176,27 +157,20 @@ sqlite3 data/botdog.db "SELECT event_type, created_at FROM events ORDER BY creat
 
 ## 📹 接入真实摄像头（可选）
 
-如果你有摄像头设备，可以验证 WebRTC 视频流功能。
+如果你有摄像头设备，可以验证 WHEP 视频流功能。
 
-### 方法 1：使用 USB 摄像头（推荐）
+### 方法：MediaMTX + FFmpeg
 
 ```bash
-# 1. 确认摄像头设备
-ls /dev/video*
-# 应该看到 /dev/video0 或类似设备
+# 1. 启动 MediaMTX
+run-pipeline.cmd
 
-# 2. 安装 GStreamer 插件
-sudo apt-get install python3-gst-1.0 gstreamer1.0-tools
-sudo apt-get install gstreamer1.0-plugins-good
-sudo apt-get install gstreamer1.0-plugins-bad
-sudo apt-get install gstreamer1.0-plugins-ugly
+# 2. 启动 FFmpeg 推流
+ffmpeg-supervisor.cmd
 
-# 3. 修改后端配置
-# 编辑 backend/webrtc_signaling.py
-# 将：
-from .simple_video_track import SimpleTestVideoSourceFactory
-# 改为：
-from .video_track import GStreamerVideoSourceFactory
+# 3. 打开 WHEP 测试页
+http://127.0.0.1:8090/index.html
+```
 
 # 4. 修改 video_track.py 中的摄像头管道
 # 找到管道配置，改为：
@@ -272,14 +246,13 @@ cat backend/.env | grep MAVLINK_SOURCE
 ### 问题 3：视频流无法连接
 
 ```bash
-# 检查摄像头设备
-ls -la /dev/video0
+# 检查 MediaMTX 是否运行
+mediamtx --version
 
-# 测试 GStreamer 管道
-gst-launch-1.0 v4l2src device=/dev/video0 ! videoconvert ! autovideosink
+# 检查 FFmpeg 推流
+ffmpeg -version
 
-# 检查 WebRTC 日志
-grep "WebRTC" backend_*.log
+# 查看 MediaMTX 日志输出，确认 cam 有发布者
 ```
 
 ### 问题 4：配置无法保存
@@ -302,7 +275,7 @@ python init_config.py
 - [ ] 三个 WebSocket 连接成功
 - [ ] 模拟遥测数据正常更新
 - [ ] 键盘控制指令正常发送
-- [ ] 游戏手柄正常识别和控制（如有）
+- [ ] 控制链路由 FT24 硬件直连
 - [ ] 配置面板可以打开
 - [ ] 13 个配置项都可以修改
 - [ ] AI 告警可以触发和确认
@@ -332,4 +305,4 @@ python init_config.py
 
 ---
 
-**下一步**：如果有真实 MAVLink 设备，可以参考 [部署测试指南](./24_deployment_testing_guide.md) 进行完整集成测试。
+**下一步**：如果需要完整集成测试，参考 README 与 `docs/31_startup_guide.md`。

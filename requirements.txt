@@ -27,20 +27,7 @@ uvicorn==0.41.0
 watchfiles==1.1.1
 websockets==16.0
 
-# WebRTC dependencies (Phase 3)
-aiortc==1.14.0
-av>=11.0.0
-aioice>=0.10.1
-cryptography>=44.0.0
-google-crc32c>=1.1
-pyee>=13.0.0
-pylibsrtp>=0.10.0
-pyopenssl>=25.0.0
-dnspython>=2.0.0
-ifaddr>=0.2.0
-cffi>=2.0.0
-
-# Video processing with GStreamer support
+# Video processing
 opencv-python>=4.8.0
 numpy>=1.24.0
 

@@ -81,6 +81,17 @@ class TelemetryQueueManager:
         """
         return await self._persistence_queue.get()
 
+    def get_latest_snapshot(self) -> TelemetrySnapshotDTO | None:
+        """
+        获取缓冲区内最新遥测快照（不阻塞）。
+
+        Returns:
+            最新快照或 None
+        """
+        if not self._snapshot_buffer:
+            return None
+        return self._snapshot_buffer[-1][1]
+
     def add_ws_client(self, ws: Any) -> None:
         """
         添加 WebSocket 客户端到连接池。

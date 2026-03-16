@@ -18,11 +18,11 @@
 |------------------------|---------|---------------------------|----------|------------|------|
 | `thermal_threshold`    | `60.0`  | Float, 30.0–120.0        | Admin    | 是         | 触发高温告警与 `ALERT_RAISED` 的温度阈值 (°C)。|
 | `heartbeat_timeout`    | `3.0`   | Float, 1.0–10.0          | Admin    | 否         | 超过该秒数未收到 `HEARTBEAT` 判定为失联。|
-| `control_rate_limit_hz`| `20`    | Int, 5–50                | Admin    | 是         | `/ws/control` 单连接最大控制指令频率 (Hz)。|
+| `control_rate_limit_hz`| `20`    | Int, 5–50                | Admin    | 否         | 旧控制链路参数（FT24 直连后不再使用）。|
 | `ws_max_clients_per_ip`| `5`     | Int, 1–20                | Admin    | 否         | 单 IP 允许维持的最大 WebSocket 连接数。|
 | `log_file_rotation`    | `500MB` | 字符串 (Loguru 语法)     | Admin    | 否         | 日志文件滚动大小阈值。|
 | `log_file_retention`   | `10 days`| 字符串 (Loguru 语法)    | Admin    | 否         | 日志文件保留时间。|
-| `video_watchdog_timeout_s`| `2.0`| Float, 1.0–10.0          | Admin    | 是         | 媒体看门狗超时时间，超出则重启 GStreamer 管线。|
+| `media_watchdog_timeout_s`| `2.0`| Float, 1.0–10.0          | Admin    | 是         | 媒体看门狗超时时间，超出则重启 FFmpeg 推流。|
 
 ## 3. 前端/客户端相关配置
 

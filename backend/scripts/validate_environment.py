@@ -3,7 +3,7 @@
 环境验证脚本。
 
 职责边界：
-- 验证 GStreamer 安装
+- 验证 MediaMTX / FFmpeg 安装
 - 验证 Python 依赖
 - 检查系统环境
 - 报告缺失的依赖
@@ -30,52 +30,24 @@ def run_command(cmd: list[str]) -> tuple[bool, str, str]:
         return False, "", f"Command not found: {cmd[0]}"
 
 
-def check_gstreamer() -> dict[str, bool]:
-    """检查 GStreamer 安装。"""
+def check_media_tools() -> dict[str, bool]:
+    """检查 MediaMTX 与 FFmpeg 安装。"""
     checks = {}
 
-    # 检查 gst-launch-1.0
-    success, stdout, _ = run_command(["gst-launch-1.0", "--version"])
-    checks["gst-launch-1.0"] = success
+    success, stdout, _ = run_command(["mediamtx", "--version"])
+    checks["mediamtx"] = success
     if success:
-        version = stdout.strip()
-        print(f"✓ gst-launch-1.0: {version}")
+        print(f"✓ mediamtx: {stdout.strip()}")
     else:
-        print("✗ gst-launch-1.0: NOT FOUND")
+        print("✗ mediamtx: NOT FOUND")
 
-    # 检查 GStreamer Python 绑定
-    try:
-        import gi
-        gi.require_version("Gst", "1.0")
-        from gi.repository import Gst
-        Gst.init(None)
-        checks["gi.repository.Gst"] = True
-        version = Gst.version_string()
-        print(f"✓ GStreamer Python: {version}")
-    except (ImportError, ValueError) as e:
-        checks["gi.repository.Gst"] = False
-        print(f"✗ GStreamer Python: {e}")
-
-    # 检查关键插件
-    plugins = [
-        "v4l2src",      # Video4Linux2 源
-        "videoconvert", # 视频转换
-        "videoscale",   # 视频缩放
-        "h264parse",    # H.264 解析
-        "rtph264pay",   # RTP H.264 付费
-        "udpsink",      # UDP 接收器
-    ]
-
-    for plugin in plugins:
-        success, _, _ = run_command([
-            "gst-inspect-1.0",
-            plugin
-        ])
-        checks[f"plugin:{plugin}"] = success
-        if success:
-            print(f"✓ GStreamer plugin: {plugin}")
-        else:
-            print(f"✗ GStreamer plugin: {plugin} (MISSING)")
+    success, stdout, _ = run_command(["ffmpeg", "-version"])
+    checks["ffmpeg"] = success
+    if success:
+        first_line = stdout.splitlines()[0] if stdout else "ffmpeg"
+        print(f"✓ ffmpeg: {first_line}")
+    else:
+        print("✗ ffmpeg: NOT FOUND")
 
     return checks
 
@@ -88,7 +60,6 @@ def check_python_dependencies() -> dict[str, bool]:
         ("fastapi", "FastAPI"),
         ("uvicorn", "Uvicorn"),
         ("websockets", "WebSockets"),
-        ("aiortc", "aiortc"),
         ("pydantic", "Pydantic"),
         ("pydantic_settings", "Pydantic Settings"),
     ]
@@ -131,14 +102,14 @@ def check_system_environment() -> dict[str, bool]:
 def main():
     """主函数。"""
     print("=" * 60)
-    print("BotDog Phase 3 环境验证")
+    print("BotDog Phase 4 环境验证")
     print("=" * 60)
 
     all_checks = {}
 
-    print("\n## 检查 GStreamer")
+    print("\n## 检查 MediaMTX / FFmpeg")
     print("-" * 60)
-    all_checks.update(check_gstreamer())
+    all_checks.update(check_media_tools())
 
     print("\n## 检查 Python 依赖")
     print("-" * 60)
@@ -154,18 +125,11 @@ def main():
     print("=" * 60)
 
     critical_checks = [
-        "gst-launch-1.0",
-        "gi.repository.Gst",
-        "plugin:v4l2src",
-        "plugin:videoconvert",
-        "plugin:videoscale",
-        "plugin:h264parse",
-        "plugin:rtph264pay",
-        "plugin:udpsink",
+        "mediamtx",
+        "ffmpeg",
         "fastapi",
         "uvicorn",
         "websockets",
-        "aiortc",
         "pydantic",
         "pydantic_settings",
         "python_version",
@@ -183,15 +147,9 @@ def main():
             print(f"  - {check}")
 
         print("\n## 安装指南")
-        print("\n### 系统依赖")
-        print("sudo apt-get install -y \\")
-        print("    libgstreamer1.0-0 \\")
-        print("    gstreamer1.0-plugins-base \\")
-        print("    gstreamer1.0-plugins-good \\")
-        print("    gstreamer1.0-plugins-bad \\")
-        print("    gstreamer1.0-tools \\")
-        print("    libgstreamer1.0-dev \\")
-        print("    python3-gi")
+        print("\n### MediaMTX / FFmpeg")
+        print("- 运行 setup-mediamtx.ps1 与 setup-ffmpeg.ps1")
+        print("- 或将 mediamtx.exe / ffmpeg.exe 添加到 PATH")
 
         print("\n### Python 依赖")
         print("pip install -r requirements.txt")

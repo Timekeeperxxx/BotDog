@@ -18,11 +18,24 @@ async def _websocket_client(app: FastAPI):
 
 
 @pytest.mark.asyncio
+class TestWebSocketControlDisabled:
+    """/ws/control 禁用行为测试。"""
+
+    async def test_websocket_control_endpoint_disabled(self, test_app) -> None:
+        """/ws/control 应不可用（路由不存在或握手失败）。"""
+        with TestClient(test_app) as client:
+            with pytest.raises(Exception):
+                with client.websocket_connect("/ws/control"):
+                    pass
+
+
+@pytest.mark.asyncio
 class TestWebSocketTelemetry:
     """WebSocket /ws/telemetry 消息序列与格式测试。"""
 
-    async def test_websocket_telemetry_messages_seq_increasing(self, test_app) -> None:
+    async def test_websocket_telemetry_messages_seq_increasing(self, override_settings, test_app) -> None:
         """连接 /ws/telemetry 后应持续收到消息且 seq 严格递增。"""
+        override_settings(MAVLINK_SOURCE="simulation")
         with TestClient(test_app) as client:
             with client.websocket_connect("/ws/telemetry") as websocket:
                 messages = []
@@ -34,8 +47,9 @@ class TestWebSocketTelemetry:
         seqs = [m["seq"] for m in messages]
         assert seqs == list(range(1, 6))
 
-    async def test_websocket_telemetry_messages_schema(self, test_app) -> None:
+    async def test_websocket_telemetry_messages_schema(self, override_settings, test_app) -> None:
         """WebSocket 消息顶层字段应符合协议约定。"""
+        override_settings(MAVLINK_SOURCE="simulation")
         with TestClient(test_app) as client:
             with client.websocket_connect("/ws/telemetry") as websocket:
                 msg = websocket.receive_json()

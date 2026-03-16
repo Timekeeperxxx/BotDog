@@ -38,18 +38,14 @@
 
 ### 2.4 媒体与工具链
 
-* GStreamer `>= 1.22`，带常用插件：
-  * `v4l2src`, `videoconvert`, `x264enc` / `nvv4l2h264enc`
-  * `rtph264pay`, `webrtcbin`
-* FFmpeg（用于调试流媒体）
-* `gst-inspect-1.0` / `gst-launch-1.0` 命令可用
+* MediaMTX（WHEP 输出）
+* FFmpeg（RTSP 拉流转码/推送）
 
-### 2.5 WebRTC 直出（WSL2 可选）
+### 2.5 MediaMTX + WHEP（Windows 本机）
 
-* webrtcbin 运行在 WSL2（Windows 后端仅信令中转）
-* 后端 `.env` 设置：`VIDEO_BACKEND_MODE=webrtcbin`
-* WSL2 需安装：`python3-gi`、`gstreamer1.0-plugins-*`
-* runner 入口：`backend/webrtc_gst_runner.py`
+* 运行 `setup-mediamtx.ps1` 与 `setup-ffmpeg.ps1` 安装依赖
+* 运行 `run-pipeline.cmd` 启动 MediaMTX 和静态 WHEP 页面
+* 运行 `ffmpeg-supervisor.cmd` 推流
 
 ## 3. 后端本地启动步骤
 
@@ -84,7 +80,7 @@ BACKEND_PORT=8000
 MAVLINK_ENDPOINT=udp:127.0.0.1:14550
 DATABASE_URL=sqlite+aiosqlite:///./data/botdog.db
 JWT_SECRET=请在本地自定义
-CORS_ALLOW_ORIGINS=["http://localhost:5173"]
+CORS_ALLOW_ORIGINS=["http://localhost:5174"]
 CORS_ALLOW_CREDENTIALS=false
 SIMULATION_WORKER_ENABLED=true
 ```
@@ -107,14 +103,14 @@ pnpm install  # 或 yarn / npm install
 ### 4.2 开发服务器
 
 ```bash
-pnpm dev  # 默认 http://localhost:5173
+pnpm dev  # 默认 http://localhost:5174
 ```
 
 前端需在 `.env.local` 中配置后端地址，例如：
 
 ```bash
-VITE_API_BASE=http://localhost:8000/api/v1
-VITE_WS_BASE=ws://localhost:8000/ws
+VITE_API_BASE_URL=http://localhost:8000
+VITE_WHEP_URL=http://127.0.0.1:8889/cam/whep
 ```
 
 ## 5. 本地 MAVLink/遥测模拟

@@ -152,14 +152,14 @@ class MAVLinkGateway:
             task_id=None,  # TODO: 获取当前任务 ID
         )
 
-        async def _start_simulation_mode(self, stop_event: asyncio.Event) -> None:
-            """
-            启动模拟数据模式。
+    async def _start_simulation_mode(self, stop_event: asyncio.Event) -> None:
+        """
+        启动模拟数据模式。
 
-            Args:
-                stop_event: 停止事件
-            """
-            logger.info("使用模拟数据源")
+        Args:
+            stop_event: 停止事件
+        """
+        logger.info("使用模拟数据源")
 
         # 初始化温度监控
         self._init_temperature_monitor()
@@ -175,6 +175,8 @@ class MAVLinkGateway:
                 sample = generate_fake_sample(seq)
 
                 # 构造遥测快照
+                t_max = 65.0 if (seq % 50) == 0 else 45.0
+
                 snapshot = TelemetrySnapshotDTO(
                     attitude=AttitudeDTO(
                         pitch=sample.pitch,
@@ -196,17 +198,13 @@ class MAVLinkGateway:
                         mode="AUTO",
                         mavlink_connected=True,
                     ),
-                    thermal=ThermalExtDTO(
-                        core_temp=40.0 + (seq % 20),  # 模拟温度 40-60°C
-                        t_max=65.0 if (seq % 50) == 0 else 45.0,  # 每50次触发告警
-                    ),
                 )
 
                 # 更新温度监控
-                if self._temperature_monitor and snapshot.thermal:
+                if self._temperature_monitor:
                     self._temperature_monitor.update_temperature(
                         "T_MAX",
-                        snapshot.thermal.t_max,
+                        t_max,
                     )
 
                 # 推送到队列

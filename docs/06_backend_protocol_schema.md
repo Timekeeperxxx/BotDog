@@ -9,7 +9,7 @@
 * ​**MAVLink 网关 (MAVLink Gateway)**​：负责底层串口/UDP比特流的解析、校验、协议封装与解包。
 * ​**WebSocket Hub (实时信令中心)**​：维持高并发的全双工长连接，分发高频遥测数据及系统告警。
 * ​**日志/抓拍服务 (Storage Service)**​：基于 SQLAlchemy (ORM) 管理 SQLite 数据库，处理时序轨迹降采样落盘与多媒体证据链持久化。
-* ​**流媒体协同 (Media Orchestration)**​：监测 GStreamer WebRTC 管道的运行状态，处理流媒体的异常重连信令。
+* ​**流媒体协同 (Media Orchestration)**​：MediaMTX + FFmpeg 管理视频流，后端不再承担信令。
 
 ### 1.2 通讯拓扑
 
@@ -28,9 +28,9 @@
 | 服务/模块                | 地址/端口             | 通讯协议         | 核心用途                                |
 | -------------------------- | ----------------------- | ------------------ | ----------------------------------------- |
 | **REST API 服务**  | `0.0.0.0:8000`    | HTTP/1.1         | 历史日志获取、系统配置下发、登录鉴权    |
-| **WebSocket 服务** | `0.0.0.0:8000/ws` | WebSocket (WSS)  | 提供 `/ws/telemetry`、`/ws/control`、`/ws/event` 等长连接入口 |
+| **WebSocket 服务** | `0.0.0.0:8000/ws` | WebSocket (WSS)  | 提供 `/ws/telemetry`、`/ws/event` 等长连接入口 |
 | **飞控数据链路**   | `127.0.0.1:14550` | UDP / Serial     | 接收边缘侧 MAVLink 2.0 二进制码流       |
-| **WebRTC 信令**    | `0.0.0.0:8443`    | WSS (或复用8000) | GStreamer 与前端浏览器的 SDP/ICE 交换   |
+| **MediaMTX WHEP**   | `0.0.0.0:8889`    | HTTP/WHEP       | MediaMTX 向前端提供 WHEP 播放          |
 
 ## 2. HTTP API 设计
 
@@ -103,7 +103,6 @@
 本系统采用单通道复用拓扑，通过挂载不同路径实现关注点分离：
 
 * `/ws/telemetry`：单向广播，用于下发飞行姿态、经纬度、电池等高频遥测。
-* `/ws/control`：双向通道，前端下发摇杆向量，后端返回指令接收 ACK。
 * `/ws/event`：单向广播，推送 AI 抓拍告警、链路断开等系统级重大事件。
 
 ### 3.2 消息通用格式
@@ -148,17 +147,6 @@
   }
   ```
 
-#### [3] CONTROL\_ACK (控制指令确认)
-
-* ​**Payload 结构**​:
-  ```
-  "payload": {
-    "ack_cmd": "MANUAL_CONTROL",
-    "result": "ACCEPTED",      // 或 "REJECTED_LOW_BATTERY"
-    "latency_ms": 12           // 后端处理该信令的耗时
-  }
-  ```
-
 ## 4. MAVLink 映射与内部数据结构
 
 ### 4.1 支持的 MAVLink 消息列表
@@ -176,20 +164,6 @@
 | `GLOBAL_POSITION_INT (#33)` | `lat`,`lon`                 | 原始 int32 除以`1E7`               | `payload.position.lat`等        |
 | `SYS_STATUS (#1)`           | `battery_remaining`             | 无转换 (0-100%)                        | `payload.battery.remaining_pct` |
 | `NAMED_VALUE_FLOAT (#251)`  | `value`(需`name`=="T\_MAX") | 直接提取浮点数 (°C)                   | 触发`ALERT_RAISED`阈值判断      |
-
-### 4.3 控制命令映射 (Frontend -> MAVLink)
-
-* ​**前端意图**​: 使用手柄摇杆控制机器狗前进、转向。
-* ​**Control DTO**​:
-  ```
-  class ManualControlDTO(BaseModel):
-      x: int = Field(ge=-1000, le=1000) # 前进/后退
-      y: int = Field(ge=-1000, le=1000) # 左右平移
-      z: int = Field(ge=-1000, le=1000) # 上下(如适用)
-      r: int = Field(ge=-1000, le=1000) # 偏航转向
-  ```
-* ​**MAVLink 映射**​: 封装为 `MANUAL_CONTROL (#69)` 报文下发。
-* ​**死区限制 (Deadzone)**​: 在转译前，若 \$|x|, |y|, |r| < 50\$ (死区阈值)，则重置为 0，防止摇杆机械漂移导致机体颤动。
 
 ## 5. 数据库与持久化结构
 
@@ -238,10 +212,10 @@
 * ​**REST API**​: HTTP Header 携带 `Authorization: Bearer <JWT_TOKEN>`。
 * ​**WebSocket**​: 建连阶段在 Query 参数中携带 `ws://.../?token=<JWT_TOKEN>`，握手阶段进行拦截与校验，失败则直接返回 `1008 Policy Violation` 掐断连接。
 
-### 7.2 控制指令限流 (Rate Limiting)
+### 7.2 控制链路说明
 
-* ​**命令频率上限**​: 考虑到射频模块带宽与飞控处理能力，针对 `/ws/control` 设定基于“令牌桶 (Token Bucket)”算法的限流：​**单连接最大 20Hz**​。
-* ​**溢出策略**​: 若超过 20Hz，后端主动触发 **Queue Drop (尾部丢弃)** 最新指令包，并下发 `CONTROL_ACK` (限流警告)。
+* Web 控制已下线，控制链路由 FT24 硬件直连。
+* 后端不再接收控制 WebSocket 指令。
 
 ### 7.3 资源保护机制
 

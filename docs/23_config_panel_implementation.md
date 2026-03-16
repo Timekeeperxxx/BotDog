@@ -80,7 +80,7 @@
 |--------|------|------|--------|------|
 | thermal_threshold | float | 30-120 | ✅ | 触发高温告警的温度阈值 (°C) |
 | heartbeat_timeout | float | 1-10 | ❌ | 心跳超时时间 (秒) |
-| control_rate_limit_hz | int | 5-50 | ✅ | 控制指令频率限制 |
+| control_rate_limit_hz | int | 5-50 | ⚠️ | 旧控制链路参数（保留展示但不生效） |
 | ws_max_clients_per_ip | int | 1-20 | ❌ | 单 IP 最大 WebSocket 连接数 |
 | video_watchdog_timeout_s | float | 1-10 | ✅ | 视频看门狗超时时间 (秒) |
 
@@ -293,7 +293,7 @@
 |--------|----------|
 | thermal_threshold | 30.0 ≤ value ≤ 120.0 |
 | heartbeat_timeout | 1.0 ≤ value ≤ 10.0 |
-| control_rate_limit_hz | 5 ≤ value ≤ 50 (整数) |
+| control_rate_limit_hz | 5 ≤ value ≤ 50 (整数，旧控制链路参数) |
 | ws_max_clients_per_ip | 1 ≤ value ≤ 20 (整数) |
 | video_watchdog_timeout_s | 1.0 ≤ value ≤ 10.0 |
 | ui_alert_ack_timeout_s | 10 ≤ value ≤ 600 (整数) |
@@ -387,7 +387,7 @@
 ## 相关文档
 
 - [实施计划](../.claude/plans/swift-knitting-sedgewick.md) - 详细的技术实施计划
-- [游戏手柄实施完成](./22_gamepad_implementation_complete.md) - 游戏手柄控制文档
+- [配置管理界面](./23_config_panel_implementation.md) - 前端配置管理说明
 - [后端配置 API](../backend/main.py) - 后端 API 实现
 - [配置服务](../backend/services_config.py) - 配置服务实现
 

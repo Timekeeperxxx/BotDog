@@ -50,43 +50,6 @@ class Settings(BaseSettings):
     TELEMETRY_SAMPLING_HZ: float = 2.0  # 遥测落盘采样频率（Hz）
     TELEMETRY_BROADCAST_HZ: float = 15.0  # 遥测广播频率（Hz）
 
-    # 阶段 2：控制通道配置
-    CONTROL_RATE_LIMIT_HZ: float = 20.0  # 控制指令限流（Hz）
-    CONTROL_DEADZONE: int = 50  # 摇杆死区（0-1000）
-
-    # 阶段 3：视频流配置
-    VIDEO_WATCHDOG_TIMEOUT_S: float = 5.0  # 视频看门狗超时（秒）
-    VIDEO_RESOLUTION: str = "1920x1080"  # 1080p 分辨率
-    VIDEO_BITRATE: int = 8000000  # 8 Mbps
-    VIDEO_FRAMERATE: int = 30  # 帧率（降低到 30fps 以兼容更多相机）
-    VIDEO_UDP_PORT: int = 19856  # UDP 视频接收端口（图传端口）
-
-    # 视频延迟优化配置（超低延迟优化）
-    VIDEO_RTSP_LATENCY_MS: int = 30  # RTSP rtspsrc 缓冲延迟（毫秒），LAN 推荐 20-50ms
-    VIDEO_RTP_JITTER_MS: int = 0  # RTP jitterbuffer 延迟（毫秒），0=禁用（rtspsrc 自带 buffer，避免双重缓冲）
-    VIDEO_QUEUE_MAXSIZE: int = 1  # Python 队列最大帧数，极限低延迟
-    VIDEO_LATENCY_PRESET: str = "low"  # 延迟预设：stable(100/100/30), low(50/0/15), ultralow(20/0/10)
-
-    # UDP 视频流转发器配置（已禁用 - video_track_native 直接监听 UDP）
-    UDP_RELAY_ENABLED: bool = True  # 启用 UDP 转发器
-    UDP_RELAY_LISTEN_PORT: int = 19856  # 转发器监听端口（边缘端推送到此端口）
-    UDP_RELAY_BIND_ADDRESS: str = "192.168.144.30"  # 转发器绑定地址
-    UDP_RELAY_TARGET_ADDRESS: str = "127.0.0.1"  # 转发目标地址（本地 WebRTC）
-    UDP_RELAY_BUFFER_SIZE: int = 65536  # UDP 缓冲区大小（字节）
-    UDP_RELAY_ENABLE_STATS: bool = True  # 启用统计
-    UDP_RELAY_STATS_INTERVAL: float = 5.0  # 统计日志输出间隔（秒）
-
-    # 相机 RTSP 配置
-    CAMERA_RTSP_URL: str = "rtsp://192.168.144.25:8554/main.264"  # 相机 RTSP 地址
-
-    # 网络接口名称配置
-    HARDWARE_INTERFACE: str = "ens33"  # 硬件网卡名称（用于图传连接）
-
-    # WebRTC 配置
-    VIDEO_BACKEND_MODE: str = "aiortc"  # aiortc | webrtcbin
-    WEBRTC_GST_WS_PATH: str = "/ws/webrtc-gst"  # webrtcbin runner 连接入口
-    WEBRTC_ICE_SERVERS: list[str] = ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"]  # STUN/TURN 服务器列表
-
     # 阶段 4：AI 告警配置
     THERMAL_THRESHOLD: float = 60.0  # 温度阈值（°C）
 

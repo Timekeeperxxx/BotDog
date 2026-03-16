@@ -1,8 +1,8 @@
-# BotDog 后端 - 阶段 3 实现
+# BotDog 后端 - 阶段 4 实现
 
 ## 技术栈
 
-- Python 3.10+（当前使用 3.10.12）
+- Python 3.12+（当前使用 3.12.x）
 - FastAPI（Web 框架）
 - SQLAlchemy 2.0（异步 ORM）
 - aiosqlite（异步 SQLite 驱动）
@@ -11,7 +11,6 @@
 - uvicorn（ASGI 服务器）
 - websockets（WebSocket 支持）
 - Pydantic（数据验证）
-- GStreamer / webrtcbin / aiortc（视频管线）
 
 ## 环境配置
 
@@ -47,7 +46,7 @@ DATABASE_URL=sqlite+aiosqlite:///./data/botdog.db
 JWT_SECRET=请在本地自定义
 
 # CORS 配置
-CORS_ALLOW_ORIGINS=["http://localhost:5173"]
+CORS_ALLOW_ORIGINS=["http://localhost:5174"]
 CORS_ALLOW_CREDENTIALS=false
 
 # MAVLink 数据源选择
@@ -63,16 +62,6 @@ TELEMETRY_BROADCAST_HZ=15.0        # 遥测广播频率（Hz）
 # 模拟数据 Worker（开发调试用）
 SIMULATION_WORKER_ENABLED=true
 
-# 视频后端模式（aiortc | webrtcbin）
-VIDEO_BACKEND_MODE=webrtcbin
-WEBRTC_GST_WS_PATH=/ws/webrtc-gst
-# 启动日志会输出 Video backend mode
-
-# 相机 RTSP
-CAMERA_RTSP_URL=rtsp://192.168.144.25:8554/main.264
-
-# WebRTC 服务器
-WEBRTC_ICE_SERVERS=["stun:stun.l.google.com:19302"]
 ```
 
 ## 启动服务
@@ -477,173 +466,68 @@ MAVLINK_ENDPOINT=udp:127.0.0.1:14550
 
 ---
 
-## 阶段 3：媒体管线与 WebRTC 流
+## 阶段 3：媒体管线与 WHEP 播放
 
-### 新增依赖
-
-```bash
-# 系统依赖
-sudo apt-get install -y \
-    libgstreamer1.0-0 \
-    gstreamer1.0-plugins-base \
-    gstreamer1.0-plugins-good \
-    gstreamer1.0-plugins-bad \
-    gstreamer1.0-tools \
-    libgstreamer1.0-dev \
-    python3-gi
-
-# Python 依赖（已添加到 requirements.txt）
-aiortc==1.6.0
-```
-
-### webrtcbin 直出模式（WSL2 可选）
-
-1. `.env` 中启用：`VIDEO_BACKEND_MODE=webrtcbin`（可回退为 `aiortc`，启动日志会打印当前模式）。
-2. Windows 后端保持运行（`uvicorn backend.main:app --host 0.0.0.0 --port 8000`）。
-3. WSL2 启动 runner：
-
-```bash
-python3 backend/webrtc_gst_runner.py \
-  --ws ws://<WINDOWS_HOST>:8000/ws/webrtc-gst \
-  --rtsp rtsp://<CAMERA_IP>:8554/main.264
-```
-
-> `WINDOWS_HOST` 建议使用 Windows 主机的局域网 IP 或 WSL2 `/etc/resolv.conf` 中的 nameserver。
->
-> 后端日志中如出现 `WebRTC (webrtcbin) runner connected` 表示信令中转已建立。
-
-### 新增模块
-
-| 模块 | 说明 |
-|------|------|
-| `webrtc_signaling.py` | WebRTC 信令处理器（SDP/ICE 交换） |
-| `video_track.py` | GStreamer 视频轨道（UDP RTP H.264 → aiortc MediaStreamTrack） |
-| `video_track_native.py` | 原生视频轨道（UDP RTP H.264 → aiortc MediaStreamTrack） |
-| `video_watchdog.py` | 视频看门狗（超时检测与重连） |
+本阶段视频由 MediaMTX + FFmpeg 负责，后端不再提供信令服务。
 
 ### 新增配置项
 
 在 `.env` 中添加：
 
 ```bash
-# 视频配置
-VIDEO_RESOLUTION=3840x2160
-VIDEO_BITRATE=8000000
-VIDEO_FRAMERATE=30
-VIDEO_UDP_PORT=19856
-VIDEO_WATCHDOG_TIMEOUT_S=5.0
-
-# WebRTC 配置
-WEBRTC_ICE_SERVERS=["stun:stun.l.google.com:19302"]
+CAMERA_RTSP_URL=rtsp://192.168.144.25:8554/main.264
 ```
 
-### 新增 API 端点
+### 说明
 
-#### WebRTC 信令 WebSocket（浏览器）
+- 视频推流由 FFmpeg 将相机 RTSP(H.265) 转码并发布到 MediaMTX 的 `cam` 路径。
+- 前端通过 WHEP 直连 MediaMTX 获取视频流。
+- 后端仅保留遥测与控制相关 API。
 
-```
-WS /ws/webrtc
-```
+### 边缘端推流（本机 RTSP 摄像头）
 
-浏览器与后端之间的信令通道，负责与 WSL2 webrtcbin runner 中转 SDP/ICE。
-
-**信令流程：**
-
-1. 客户端连接 → 服务端发送 `welcome` + `client_id`
-2. 客户端发送 `offer`（SDP）
-3. 服务端回复 `answer`（SDP）+ `ice_candidates`
-4. 双方交换 `ice_candidate` 建立 P2P 连接
-
-**消息格式：**
-
-```json
-{
-  "msg_type": "offer|answer|ice_candidate|welcome|ice_candidates|error",
-  "client_id": "uuid（仅 welcome）",
-  "payload": {
-    "sdp": "SDP 内容",
-    "candidates": [/* ICE 候选数组 */],
-    "candidate": "单个 ICE 候选",
-    "sdpMid": "ICE 候选 SDP MID",
-    "sdpMLineIndex": 0,
-    "error": "错误信息"
-  }
-}
-```
-
-#### WebRTC 信令 WebSocket（WSL2 webrtcbin runner）
-
-```
-WS /ws/webrtc-gst
-```
-
-WSL2 runner 专用入口，用于接收浏览器 offer 并回传 answer/ICE。
-
-### 边缘端推流（部署在 Jetson）
-
-脚本位置：`edge/gstreamer_streamer.py`
-
-**测试模式（推荐）：**
+视频由 FFmpeg 拉取相机 RTSP 并推送到 MediaMTX：
 
 ```bash
-python edge/gstreamer_streamer.py \
-    --source videotestsrc \
-    --width 1920 \
-    --height 1080 \
-    --framerate 30 \
-    --host 127.0.0.1 \
-    --port 5000
+ffmpeg -rtsp_transport tcp -i rtsp://<CAMERA_IP>:8554/main.264 \
+  -fflags nobuffer -flags low_delay -an \
+  -c:v libx264 -preset ultrafast -tune zerolatency -g 30 -keyint_min 30 \
+  -f rtsp rtsp://127.0.0.1:8554/cam
 ```
 
-**摄像头模式：**
-
-```bash
-# USB 摄像头
-python edge/gstreamer_streamer.py \
-    --source v4l2src \
-    --device /dev/video0 \
-    --width 1920 \
-    --height 1080
-
-# Jetson MIPI CSI 摄像头
-python edge/gstreamer_streamer.py \
-    --source nvarguscamerasrc \
-    --width 3840 \
-    --height 2160
-```
+可通过 `CAMERA_RTSP_URL` 覆盖输入地址。
 
 ### 验证环境
 
-运行环境验证脚本：
+运行环境验证：
 
-```bash
-python backend/scripts/validate_environment.py
-```
+- 确认 `mediamtx.exe` 与 `ffmpeg.exe` 可在命令行中访问。
+- 使用 `ffmpeg -version` 与 `mediamtx --version` 验证安装。
 
-应看到所有关键依赖已安装（`gst-launch-1.0`、`aiortc`、GStreamer 插件）。
+应看到所有关键依赖已安装（`mediamtx`、`ffmpeg`）。
 
 ### 常见问题
 
-**Q: WebRTC 连接失败？**
+**Q: WHEP 播放失败？**
 
-1. 检查 `/ws/webrtc` WebSocket 是否正常
-2. 检查浏览器控制台错误
-3. 确认 STUN 服务器可达
+1. 检查 MediaMTX 是否运行
+2. 确认 `MEDIA_MTX_WHEP_URL` 与前端 `VITE_WHEP_URL` 一致
+3. 确认浏览器控制台是否有 ICE/HTTP 错误
 
 **Q: 没有视频流？**
 
-1. 确认边缘端推流已启动
-2. 检查 UDP 端口 5000 是否被占用
-3. 确认 GStreamer 管道正常启动
+1. 确认 FFmpeg 推流已启动
+2. 检查相机 RTSP 地址是否可达
+3. 确认 MediaMTX `cam` 路径是否有流
 
 **Q: 视频卡顿或延迟高？**
 
-1. 降低分辨率和码率（例如 1280x720, 4Mbps）
+1. 降低 FFmpeg 输出分辨率/码率
 2. 检查网络带宽
 3. 检查系统负载
 
 ### 下一步
 
-阶段 3 当前已完成：信令服务、视频轨道接入、前端 VideoPlayer 与 HUD 叠层、边缘端 GStreamer 推流脚本。
+阶段 3 当前已完成：MediaMTX + FFmpeg 推流、前端 WHEP 播放、边缘端 RTSP 接入。
 
 后续可完善：姿态仪可视化、航向指示器、自适应码率、网络波动恢复。

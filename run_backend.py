@@ -12,16 +12,10 @@ sys.path.insert(0, os.path.dirname(__file__))
 if __name__ == "__main__":
     import uvicorn
     from backend.main import app
-    from backend.check_gstreamer import main as check_gstreamer
 
     print("=" * 80)
     print("启动 BotDog 后端系统")
     print("=" * 80)
-
-    # 启动前检测 GStreamer 环境
-    if check_gstreamer() != 0:
-        print("\n❌ GStreamer 环境检测失败，无法启动后端")
-        sys.exit(1)
 
     print("\n服务器地址: http://localhost:8000")
     print("API 文档: http://localhost:8000/docs")

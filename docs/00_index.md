@@ -14,7 +14,7 @@
 5. **[05_frontend_view_contract.md](05_frontend_view_contract.md)** - 前端视图与数据/事件契约
 6. **[06_backend_protocol_schema.md](06_backend_protocol_schema.md)** - 后端 HTTP/WS 协议与数据结构
 7. **[07_mavlink_spec.md](07_mavlink_spec.md)** - MAVLink 与遥测消息约定
-8. **[08_media_pipeline_design.md](08_media_pipeline_design.md)** - 媒体管线与 WebRTC 设计
+8. **MediaMTX + WHEP 视频链路** - 参考 README 与 `docs/ft24_control_migration.md`
 9. **[09_config_matrix.md](09_config_matrix.md)** - 配置项矩阵与参数约定
 10. **[11_tech_selection.md](11_tech_selection.md)** - 技术栈选型
 
@@ -24,34 +24,23 @@
 12. **[16_ai_alert_implementation.md](16_ai_alert_implementation.md)** - AI 告警系统实施
 13. **[17_ai_alert_frontend.md](17_ai_alert_frontend.md)** - AI 告警前端集成
 
-## 🎮 最新功能
-
-### 游戏手柄控制
-14. **[22_gamepad_implementation_complete.md](22_gamepad_implementation_complete.md)** - 游戏手柄控制实施完成总结
+## 🎯 最新功能
 
 ### 配置管理
-15. **[23_config_panel_implementation.md](23_config_panel_implementation.md)** - 前端配置界面实施完成总结
+14. **[23_config_panel_implementation.md](23_config_panel_implementation.md)** - 前端配置界面实施完成总结
 
 ## 🚀 部署相关
 
-16. **[24_deployment_testing_guide.md](24_deployment_testing_guide.md)** - 正式部署测试指南
-   - 机器狗端参数配置
-   - 操作端环境准备
-   - 测试流程和故障排查
-
-17. **[25_git_push_guide.md](25_git_push_guide.md)** - Git 推送和身份验证指南
+15. **[25_git_push_guide.md](25_git_push_guide.md)** - Git 推送和身份验证指南
 
 ## 📡 硬件验证
 
-18. **[26_hardware_verification_without_dog.md](26_hardware_verification_without_dog.md)** - 无机器狗硬件验证指南
+16. **[26_hardware_verification_without_dog.md](26_hardware_verification_without_dog.md)** - 无机器狗硬件验证指南
    - 可验证的功能清单
    - 详细验证步骤
    - 故障排查方法
 
-19. **[27_video_device_setup.md](27_video_device_setup.md)** - 图传设备和摄像头接入指南
-   - 图传设备使用场景
-   - USB 摄像头配置
-   - WebRTC 视频流测试
+17. **视频设备接入（MediaMTX + WHEP）** - 参考 README 与 `docs/ft24_control_migration.md`
 
 ---
 
@@ -61,8 +50,7 @@
 
 ```bash
 # 后端服务
-cd backend
-python main.py
+.start_backend.bat
 
 # 前端开发
 cd frontend
@@ -84,7 +72,7 @@ python acceptance_test.py
 |------|--------|------|
 | 后端系统 | 100% | ✅ 稳定运行 |
 | 前端系统 | 100% | ✅ 稳定运行 |
-| 控制系统 | 100% | ✅ 键盘+游戏手柄 |
+| 控制链路（FT24） | 100% | ✅ 硬件直连 |
 | 配置管理 | 100% | ✅ 可视化界面 |
 | 告警系统 | 100% | ✅ 完全实现 |
 | 验收测试 | 100% | ✅ 全部通过 |

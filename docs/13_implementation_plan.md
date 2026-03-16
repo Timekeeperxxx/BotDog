@@ -73,57 +73,31 @@
 
 ---
 
-## 阶段 2：控制通道与急停机制
+## 阶段 2：控制链路调整
 
-1. **控制 WebSocket `/ws/control`**
-   - 后端：
-     - 定义 `ManualControlDTO`（见 `06_backend_protocol_schema.md`）。
-     - 在 `/ws/control` 中接收前端 `MANUAL_CONTROL` 消息，进行：
-       - JSON 校验。
-       - 速率限流（`control_rate_limit_hz`）。
-       - 状态检查（如 `E_STOP_TRIGGERED` 时拒绝）。
-     - 转换为 MAVLink `MANUAL_CONTROL` 报文并写入发送队列。
-     - 回发 `CONTROL_ACK`。
+2. **后端调整**
+   - 维持 `/ws/telemetry`、`/ws/event` 两条广播通道。
+   - 控制链路由 FT24 硬件直连，Web 控制不再实现。
 
-2. **前端控制输入**
-   - 实现手柄/键盘监听模块：
-     - 每 10Hz 采样输入（参照 `01_requirements_use_cases.md` UC-01）。
-   - 将输入封装为 `MANUAL_CONTROL` 消息并发送 `/ws/control`。
-   - 在 UI 中展示限流/拒绝反馈（根据 `CONTROL_ACK`）。
-
-3. **急停逻辑**
-   - 后端增加：
-     - `POST /api/v1/control/e-stop` 或 WS `E_STOP_TRIGGER` 处理。
-     - 更新系统状态为 `E_STOP_TRIGGERED`，并记录日志、触发 `ALERT_RAISED` 或 `SYSTEM_EVENT`。
-   - 前端：
-     - 将急停按钮绑定到上述接口。
-     - 接收到 `E_STOP_TRIGGERED` 状态后，全局 UI 标红并禁用控制输入。
+3. **前端调整**
+   - 保留 WHEP 播放与遥测/事件展示。
+   - 移除控制面板与控制指令发送逻辑。
 
 ---
 
-## 阶段 3：媒体管线与 WebRTC 流
+## 阶段 3：媒体管线与 WHEP 播放
 
-1. **媒体信令服务**
-   - 可选两种方式（二选一）：
-     - A. 在 Python 内部集成 GStreamer（复杂度高）。
-     - B. 单独编写一个 Node/Go 或 Python 子进程，专职走 `webrtcbin`（推荐）。
-   - 按 `08_media_pipeline_design.md` 实现：
-     - `create-offer` / `answer` 的 HTTP/WS 信令端点。
-     - WebRTC/ICE 候选的交换。
+1. **MediaMTX + FFmpeg**
+   - 使用 MediaMTX 提供 WHEP 输出。
+   - 使用 FFmpeg 从相机 RTSP 拉流并推送到 MediaMTX 的 `cam` 路径。
 
-2. **边缘端推流**
-   - 在 Jetson 或本地模拟机上，按 `08_media_pipeline_design.md` 的命令拼装 GStreamer 管线。
-   - 确保 `webrtcbin` 能与地面信令服务建立连接。
-
-3. **前端视频播放**
-   - 在 `VideoHud` 组件中：
-     - 使用 WebRTC API 建立 PeerConnection。
-     - 将收到的 MediaStreamTrack 挂载到 `<video>`。
+2. **前端视频播放**
+   - 在 `VideoHud` 组件中通过 WHEP 建立播放连接。
+   - 将收到的媒体流挂载到 `<video>`。
    - 接入 `04_ui_prototype.html` 中的全屏/隐藏 UI 状态机。
 
-4. **Watchdog 与重连**
-   - 后端媒体服务实现 Watchdog：
-     - 超过 `video_watchdog_timeout_s` 未收到 RTP 包时，重启 GStreamer 管线。
+3. **重连与故障提示**
+   - FFmpeg 进程断流自动重连。
    - 前端在 UI 上显示“视频重连中”状态。
 
 ---
@@ -158,7 +132,7 @@
      - 实现 `POST /api/v1/config`（Admin 角色修改允许热更新的配置）。
 
 2. **前端配置界面（可后置）**
-   - 简单表格 + 表单，展示和修改关键参数（如 `thermal_threshold`、`control_rate_limit_hz` 等）。
+   - 简单表格 + 表单，展示和修改关键参数（如 `thermal_threshold`、`heartbeat_timeout` 等）。
 
 3. **执行 `12_acceptance_tests.md` 中的验收用例**
    - UC-01 ~ UC-05 分别验证：

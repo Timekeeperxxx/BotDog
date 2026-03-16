@@ -68,8 +68,8 @@
 
 ### 5.1 视频容器
 
-* 媒体流：从 WebRTC PeerConnection 的 `MediaStreamTrack` 挂载到 `<video>`。
-* 分辨率/帧率：由媒体管线提供（参见 `08_media_pipeline_design.md`）。
+* 媒体流：从 WHEP 建立的连接挂载到 `<video>`。
+* 分辨率/帧率：由 MediaMTX/FFmpeg 管线提供。
 
 ### 5.2 HUD 元素
 
@@ -148,25 +148,7 @@
 
 ### 8.1 控制指令 (摇杆/键鼠)
 
-* WebSocket 路径：`/ws/control`
-* 消息：
-
-```json
-{
-  "timestamp": 1714560000.123,
-  "msg_type": "MANUAL_CONTROL",
-  "payload": {
-    "x": 0,
-    "y": 200,
-    "z": 0,
-    "r": -150
-  }
-}
-```
-
-后端返回：
-
-* 类型：`CONTROL_ACK`（见后端协议文档 3.3）。
+Web 控制已下线，控制链路由 FT24 硬件直连，不再通过 `/ws/control` 发送控制指令。
 
 ### 8.2 急停按钮
 

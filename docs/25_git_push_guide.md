@@ -4,7 +4,7 @@
 
 **仓库地址**: `https://github.com/Timekeeperxxx/BotDog.git`
 **当前分支**: `main`
-**最新提交**: `94ef495 - feat: 添加游戏手柄控制和前端配置界面`
+**最新提交**: `main` 当前以 MediaMTX + WHEP + FT24 控制链路为准。
 
 ---
 
@@ -322,7 +322,7 @@ git log origin/main --oneline -1
 ### 4. 分支管理
 
 - ✅ 主分支保持稳定（`main` 或 `master`）
-- ✅ 功能分支使用描述性命名（`feature/gamepad-control`）
+- ✅ 功能分支使用描述性命名（`feature/config-panel`）
 - ✅ 及时合并分支，保持仓库清洁
 
 ---

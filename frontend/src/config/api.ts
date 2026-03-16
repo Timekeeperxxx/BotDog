@@ -6,7 +6,7 @@
 
 // 后端地址配置
 // Windows 宿主机原生运行环境，后端在本地
-const API_BASE_URL = 'http://192.168.144.30:8000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://192.168.144.30:8000';
 
 /**
  * 获取后端 API 基础 URL

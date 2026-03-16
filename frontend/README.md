@@ -22,7 +22,7 @@ npm install
 npm run dev
 ```
 
-前端将运行在 `http://localhost:5173`
+前端将运行在 `http://localhost:5174`
 
 ### 构建生产版本
 
@@ -41,10 +41,10 @@ src/
 │   ├── BatteryIndicator.tsx # 电池状态
 │   ├── PositionPanel.tsx    # 位置信息
 │   ├── StatusBar.tsx        # 系统状态栏
-│   └── VideoPlayer.tsx      # WebRTC 视频播放器
+│   └── VideoPlayer.tsx      # WHEP 视频播放器
 ├── hooks/              # 自定义 Hooks
 │   ├── useTelemetryWebSocket.ts # WebSocket 连接管理
-│   └── useWebRTC.ts            # WebRTC 连接管理
+│   └── useWhepVideo.ts         # WHEP 播放管理
 ├── stores/             # Zustand Store
 │   └── telemetryStore.ts     # 遥测数据状态管理
 ├── types/              # TypeScript 类型定义
@@ -57,17 +57,22 @@ src/
 
 - ✅ WebSocket 自动连接与重连
 - ✅ 实时遥测数据显示（姿态、位置、电池）
-- ✅ WebRTC 视频播放与 HUD 叠层
+- ✅ WHEP 视频播放与 HUD 叠层
 - ✅ 状态持久化与状态管理
 - ✅ 响应式布局设计
 - ✅ 深色工业控制台主题
 
 ## 后端地址配置
 
-后端地址目前固定在 [frontend/src/config/api.ts](frontend/src/config/api.ts) 的 `API_BASE_URL`。
-如需修改，请直接编辑该文件。
+后端地址默认读取 `VITE_API_BASE_URL`，未设置时回退到 [frontend/src/config/api.ts](frontend/src/config/api.ts) 的默认值。
 
-> `frontend/.env` 中的 `VITE_API_BASE_URL` 目前未接入，仅作预留。
+## WHEP 播放地址
+
+通过 `VITE_WHEP_URL` 指定 MediaMTX 的 WHEP 地址，例如：
+
+```
+VITE_WHEP_URL=http://127.0.0.1:8889/cam/whep
+```
 
 ## WebSocket 连接
 
@@ -77,11 +82,9 @@ src/
 
 可在 `src/hooks/useTelemetryWebSocket.ts` 中修改连接地址。
 
-### WebRTC 信令 WebSocket
+## WHEP 播放
 
-默认连接到 `ws://<API_HOST>:8000/ws/webrtc`，地址由 [frontend/src/config/api.ts](frontend/src/config/api.ts) 中的 `API_BASE_URL` 派生。
-
-需要时可在 `src/hooks/useWebRTC.ts` 通过 `wsUrl` 覆盖。
+前端通过 WHEP 直连 MediaMTX，使用 `VITE_WHEP_URL` 配置播放地址。
 
 ## 组件说明
 

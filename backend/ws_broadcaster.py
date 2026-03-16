@@ -87,8 +87,7 @@ class WebSocketBroadcaster:
                 self.queue_manager.get_next_broadcast_snapshot(), timeout=timeout
             )
         except asyncio.TimeoutError:
-            # 超时返回空快照，避免阻塞
-            return TelemetrySnapshotDTO()
+            return self.queue_manager.get_latest_snapshot()
 
     async def _broadcast_snapshot(self, snapshot: TelemetrySnapshotDTO) -> None:
         """

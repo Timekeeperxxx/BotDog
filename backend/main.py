@@ -12,19 +12,17 @@ import time
 from contextlib import asynccontextmanager
 from typing import Any, Dict, AsyncIterator, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .database import get_db, init_db, get_session_factory
 from .logging_config import logger, setup_logging
 from .schemas import (
-    ControlAckDTO,
     EStopResetResponse,
     EStopResponse,
     EvidenceListResponse,
     LogsPage,
-    ManualControlDTO,
     SessionStartRequest,
     SessionStartResponse,
     SessionStopRequest,
@@ -40,9 +38,7 @@ from .mavlink_dto import SystemStatusDTO
 from .state_machine import StateMachine, SystemState
 from .telemetry_queue import TelemetryQueueManager, set_telemetry_queue_manager
 from .ws_broadcaster import websocket_telemetry_handler, WebSocketBroadcaster
-from .ws_control_handler import ControlWebSocketHandler
 from .workers_telemetry import TelemetryPersistenceWorker
-from .webrtc_signaling import WebRTCSignalingHandler
 from .ws_event_broadcaster import EventBroadcaster
 from .alert_service import AlertService
 
@@ -55,7 +51,6 @@ _queue_manager: TelemetryQueueManager | None = None
 _mavlink_gateway: MAVLinkGateway | None = None
 _ws_broadcaster: WebSocketBroadcaster | None = None
 _persistence_worker: TelemetryPersistenceWorker | None = None
-_webrtc_signaling: WebRTCSignalingHandler | None = None
 _event_broadcaster: EventBroadcaster | None = None
 
 
@@ -82,14 +77,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     - WebSocket 广播器（遥测数据推送）
     - 遥测落盘 Worker（数据库写入）
 
-    阶段 3 集成的组件：
-    - WebRTC 信令处理器（视频流信令）
     """
 
     # Startup
     setup_logging()
     logger.info("BotDog backend starting up (lifespan)...")
-    logger.info("Video backend mode: {}", settings.VIDEO_BACKEND_MODE)
     await init_db()
     logger.info("Database initialized.")
 
@@ -138,23 +130,26 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("WebSocket 广播器已启动")
 
         # 5. 初始化遥测落盘 Worker
-        session_factory = get_session_factory()
-        global _persistence_worker
-        _persistence_worker = TelemetryPersistenceWorker(
-            session_factory=session_factory,
-            sampling_interval=1.0 / settings.TELEMETRY_SAMPLING_HZ,
-        )
-        tasks.append(asyncio.create_task(_persistence_worker.start(stop_event)))
-        logger.info("遥测落盘 Worker 已启动")
+        if settings.MAVLINK_SOURCE != "simulation" or settings.SIMULATION_WORKER_ENABLED:
+            session_factory = get_session_factory()
+            global _persistence_worker
+            _persistence_worker = TelemetryPersistenceWorker(
+                session_factory=session_factory,
+                sampling_interval=1.0 / settings.TELEMETRY_SAMPLING_HZ,
+            )
+            tasks.append(asyncio.create_task(_persistence_worker.start(stop_event)))
+            logger.info("遥测落盘 Worker 已启动")
+        else:
+            logger.info("遥测落盘 Worker 已跳过（simulation + SIMULATION_WORKER_ENABLED=false）")
 
-        # 6. 初始化 WebRTC 信令处理器（阶段 3）
-        global _webrtc_signaling
-        _webrtc_signaling = WebRTCSignalingHandler()
-        # 启动 UDP 视频流转发器（方案 B：透明转发）
-        await _webrtc_signaling.start_udp_relay()
-        logger.info("WebRTC 信令处理器已初始化")
+        # 6. 可选：启动模拟数据 Worker（开发/测试）
+        if settings.SIMULATION_WORKER_ENABLED:
+            from .workers_simulation import simulation_worker
 
-        # 7. 初始化事件广播器（阶段 4）
+            tasks.append(asyncio.create_task(simulation_worker(stop_event)))
+            logger.info("模拟数据 Worker 已启动")
+
+        # 6. 初始化事件广播器（阶段 4）
         from .global_event_broadcaster import set_global_event_broadcaster
         from .alert_service import set_alert_service
         global _event_broadcaster
@@ -175,10 +170,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Shutdown
         logger.info("BotDog backend shutting down (lifespan)...")
         stop_event.set()
-
-        # 停止 UDP 视频流转发器
-        if _webrtc_signaling is not None:
-            await _webrtc_signaling.stop_udp_relay()
 
         # 取消所有任务
         for task in tasks:
@@ -215,7 +206,7 @@ def create_app() -> FastAPI:
     cors_allow_credentials = settings.CORS_ALLOW_CREDENTIALS
     if cors_allow_credentials and "*" in cors_allow_origins:
         raise ValueError(
-            "无效的CORS设置: CORS_ALLOW_CREDENTIALS=true不能与包含'*'的CORS_ALLOW_ORIGINS一起使用"
+            "Invalid CORS settings: CORS_ALLOW_CREDENTIALS=true cannot be used with '*' in CORS_ALLOW_ORIGINS"
         )
 
     # CORS（开发阶段放宽；生产环境建议收紧到前端域名）
@@ -322,7 +313,7 @@ def register_routes(app: FastAPI) -> None:
         if task is None:
             raise HTTPException(
                 status_code=404,
-                detail=f"task_id={body.task_id}未找到",
+                detail=f"task_id={body.task_id} not found",
             )
 
         await write_log(
@@ -413,62 +404,6 @@ def register_routes(app: FastAPI) -> None:
 
         state_machine = _get_state_machine()
         await websocket_telemetry_handler(websocket, _queue_manager, state_machine)
-
-    @app.websocket("/ws/control")
-    async def control_ws(websocket: WebSocket) -> None:
-        """
-        控制 WebSocket 端点（阶段 2）。
-
-        功能：
-        - 接受前端控制指令（MANUAL_CONTROL）
-        - 实现速率限流（20Hz）
-        - 状态检查（E_STOP_TRIGGERED 时拒绝）
-        - 回发 CONTROL_ACK 确认
-        """
-
-        state_machine = _get_state_machine()
-        handler = ControlWebSocketHandler(state_machine)
-        await handler.handle_connection(websocket)
-
-    @app.websocket("/ws/webrtc")
-    async def webrtc_ws(websocket: WebSocket) -> None:
-        """
-        WebRTC 信令端点（阶段 3）。
-
-        功能：
-        - 接受客户端连接
-        - 处理 SDP offer/answer 交换
-        - 处理 ICE 候选交换
-        - 管理对等连接生命周期
-        """
-
-        print(f"\n{'='*80}")
-        print(f"🔗 WebRTC WebSocket 连接请求到达")
-        print(f"{'='*80}\n")
-
-        if _webrtc_signaling is None:
-            print(f"❌ WebRTC 信令服务未初始化")
-            await websocket.close(code=1011, reason="WebRTC 信令服务未初始化")
-            return
-
-        print(f"✅ 开始处理 WebRTC 连接...")
-        await _webrtc_signaling.handle_connection(websocket)
-
-    @app.websocket(settings.WEBRTC_GST_WS_PATH)
-    async def webrtc_gst_ws(websocket: WebSocket) -> None:
-        """
-        webrtcbin runner 信令端点（WSL2）。
-
-        功能：
-        - 接受 webrtcbin runner 连接
-        - 转发 SDP answer / ICE 到浏览器
-        """
-
-        if _webrtc_signaling is None:
-            await websocket.close(code=1011, reason="WebRTC 信令服务未初始化")
-            return
-
-        await _webrtc_signaling.handle_gst_connection(websocket)
 
     @app.websocket("/ws/event")
     async def event_ws(websocket: WebSocket) -> None:
@@ -721,22 +656,6 @@ def register_routes(app: FastAPI) -> None:
             "history": history,
             "total": len(history),
         }
-
-    @app.get("/api/v1/video/udp-relay/stats")
-    async def get_udp_relay_stats():
-        """
-        获取 UDP 视频流转发器统计信息。
-
-        Returns:
-            UDP 转发器统计（丢包率、延迟、带宽等）
-        """
-        if _webrtc_signaling is None:
-            raise HTTPException(
-                status_code=503,
-                detail="WebRTC 信令服务未初始化",
-            )
-
-        return _webrtc_signaling.get_udp_relay_stats()
 
 
 app = create_app()
