@@ -3,7 +3,7 @@
  * 包含完整的前后端交互、WebSocket连接和WHEP视频流
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useBotDogWebSocket } from './hooks/useBotDogWebSocket';
 import { useWhepVideo } from './hooks/useWhepVideo';
 import { ConfigPanel } from './components/ConfigPanel';
@@ -11,210 +11,258 @@ import { ConfigPanel } from './components/ConfigPanel';
 // ==================== 顶部状态栏 ====================
 function HeaderBar({
   latency,
-  rssi,
   temperature,
   battery,
   onEmergencyStop,
   onToggleFullscreen,
-  onOpenConfig,
-  isConnected
+  onOpenConfig
 }: {
   latency: string;
-  rssi: string;
   temperature: string;
   battery: string;
   onEmergencyStop: () => void;
   onToggleFullscreen: () => void;
   onOpenConfig: () => void;
-  isConnected: boolean;
 }) {
-  const [currentTime, setCurrentTime] = useState('');
-
-  useEffect(() => {
-    const updateTime = () => {
-      setCurrentTime(new Date().toLocaleTimeString('zh-CN', { hour12: false }));
-    };
-    updateTime();
-    const timer = setInterval(updateTime, 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   return (
     <header style={{
+      height: '48px',
+      borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
       display: 'flex',
-      justifyContent: 'space-between',
       alignItems: 'center',
-      padding: '0.75rem 1.5rem',
-      background: 'rgba(26, 29, 35, 0.9)',
-      border: '1px solid rgba(255, 255, 255, 0.05)',
-      borderRadius: '8px',
-      backdropFilter: 'blur(20px)',
+      justifyContent: 'space-between',
+      padding: '0 24px',
+      background: '#0f1115',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+          <span style={{ color: '#ffffff', fontWeight: 900, letterSpacing: '-0.04em' }}>BOTDOG</span>
+          <span style={{ fontSize: '10px', color: '#3b82f6', fontWeight: 700, letterSpacing: '-0.02em' }}>V5.0 核心数据终端</span>
+        </div>
         <div style={{
           display: 'flex',
-          alignItems: 'center',
           gap: '16px',
-          paddingRight: '32px',
-          borderRight: '1px solid rgba(255, 255, 255, 0.05)',
+          fontSize: '11px',
+          fontFamily: '"JetBrains Mono", monospace',
+          borderLeft: '1px solid rgba(255, 255, 255, 0.1)',
+          paddingLeft: '20px',
         }}>
-          <span style={{ color: '#60a5fa', fontSize: '18px' }}>🔌</span>
-          <div>
-            <h1 style={{
-              fontSize: '14px',
-              fontWeight: 'bold',
-              letterSpacing: 'tight',
-              textTransform: 'uppercase',
-              margin: 0,
-              color: '#e2e8f0',
-            }}>
-              机器狗控制系统 <span style={{ color: '#3b82f6' }}>v5.0-专业版</span>
-            </h1>
-            <p style={{
-              fontSize: '10px',
-              color: isConnected ? '#10b981' : '#64748b',
-              fontWeight: '500',
-              margin: '2px 0 0 0',
-            }}>
-              设备编号: SD-082-ALPHA {isConnected ? '● 已连接' : '○ 未连接'}
-            </p>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: '40px' }}>
-          <MetricItem label="链路延迟" value={latency} />
-          <MetricItem label="信号强度" value={rssi} />
-          <MetricItem label="核心温度" value={temperature} color={parseFloat(temperature) > 42 ? '#ef4444' : '#fb923c'} />
-          <MetricItem label="剩余电量" value={battery} color={parseFloat(battery) < 20 ? '#ef4444' : '#10b981'} />
+          <span style={{ color: parseFloat(battery) < 20 ? '#ef4444' : '#10b981' }}>电池: {battery}</span>
+          <span style={{ color: '#94a3b8' }}>延迟: {latency}</span>
+          <span style={{ color: '#94a3b8' }}>温度: {temperature}</span>
         </div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
-        <div style={{ textAlign: 'right', marginRight: '16px' }}>
-          <span style={{ fontSize: '9px', color: '#64748b', textTransform: 'uppercase', fontWeight: 'bold', display: 'block' }}>
-            终端时间
-          </span>
-          <div style={{ fontSize: '14px', fontWeight: 'bold', fontFamily: '"JetBrains Mono", monospace', color: '#e2e8f0' }}>
-            {currentTime}
-          </div>
-        </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         <button
           onClick={onOpenConfig}
           style={{
-            background: 'rgba(59, 130, 246, 0.2)',
-            border: '1px solid rgba(59, 130, 246, 0.4)',
-            padding: '8px 16px',
+            height: '32px',
+            padding: '0 14px',
+            fontSize: '11px',
+            background: '#1f2937',
+            color: '#e2e8f0',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
             borderRadius: '6px',
-            color: '#93c5fd',
-            fontWeight: 'bold',
-            textTransform: 'uppercase',
-            fontSize: '10px',
-            letterSpacing: '1px',
             cursor: 'pointer',
-            marginRight: '12px',
+            fontWeight: 700,
           }}
-          title="系统配置"
         >
-          ⚙️ 配置
+          设置
         </button>
         <button
           onClick={onToggleFullscreen}
           style={{
-            background: '#3b82f6',
-            borderBottom: '4px solid #2563eb',
-            transition: 'all 0.1s',
-            padding: '8px 16px',
+            height: '32px',
+            padding: '0 14px',
+            fontSize: '11px',
+            background: '#1e293b',
+            color: '#93c5fd',
+            border: '1px solid rgba(59, 130, 246, 0.35)',
             borderRadius: '6px',
-            color: 'white',
-            fontWeight: 'bold',
-            textTransform: 'uppercase',
-            fontSize: '10px',
-            letterSpacing: '1px',
             cursor: 'pointer',
-            border: 'none',
-            marginRight: '12px',
+            fontWeight: 700,
           }}
-          title="全屏显示 (F11)"
         >
-          ⛶ 全屏
+          全屏
         </button>
         <button
           onClick={onEmergencyStop}
           style={{
-            background: '#b91c1c',
-            borderBottom: '4px solid #7f1d1d',
-            transition: 'all 0.1s',
-            padding: '8px 20px',
+            height: '32px',
+            padding: '0 14px',
+            fontSize: '11px',
+            background: '#2b0b0b',
+            color: '#f87171',
+            border: '1px solid rgba(248, 113, 113, 0.35)',
             borderRadius: '6px',
-            color: 'white',
-            fontWeight: 'bold',
-            textTransform: 'uppercase',
-            fontSize: '10px',
-            letterSpacing: '1px',
             cursor: 'pointer',
-            border: 'none',
+            fontWeight: 700,
           }}
         >
-          紧急制动
+          紧急停机
         </button>
       </div>
     </header>
   );
 }
 
-function MetricItem({ label, value, color }: { label: string; value: string; color?: string }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-      <span style={{ fontSize: '9px', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase' }}>
-        {label}
-      </span>
-      <span style={{ fontSize: '12px', fontFamily: '"JetBrains Mono", monospace', fontWeight: 'bold', color: color || '#e2e8f0' }}>
-        {value}
-      </span>
-    </div>
-  );
-}
-
 // ==================== 左侧栏 ====================
-function LeftPanel({ snapshots }: { snapshots: any[] }) {
+function LeftPanel({
+  latency,
+  battery,
+  temperature,
+  groundspeed,
+  angularVel,
+  resolution,
+  rssi,
+  logs
+}: {
+  latency: string;
+  battery: string;
+  temperature: string;
+  groundspeed: string;
+  angularVel: string;
+  resolution: string;
+  rssi: string;
+  logs: Array<{ timestamp: number; module: string; message: string; level: string }>;
+}) {
+  const rows = [
+    { label: '延迟', value: latency, unit: 'ms' },
+    { label: '信号', value: rssi, unit: 'dBm' },
+    { label: '温度', value: temperature, unit: '°C' },
+    { label: '电池', value: battery, unit: '%' },
+    { label: '线速度', value: groundspeed, unit: 'm/s' },
+    { label: '角速度', value: angularVel, unit: '°/s' },
+  ];
+
   return (
     <aside style={{
-      width: '256px',
+      width: '260px',
+      borderRight: '1px solid rgba(255, 255, 255, 0.1)',
+      background: '#0f1115',
       display: 'flex',
       flexDirection: 'column',
-      gap: '16px',
     }}>
+      <div style={{
+        padding: '16px',
+        borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+        background: '#0f1115',
+      }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          color: '#60a5fa',
+          fontSize: '11px',
+          fontWeight: 700,
+          letterSpacing: '0.16em',
+          textTransform: 'uppercase',
+          marginBottom: '16px',
+        }}>
+          行走数据监控
+        </div>
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          fontFamily: '"JetBrains Mono", monospace',
+          fontSize: '11px',
+        }}>
+          {rows.map((row) => (
+            <div
+              key={row.label}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                paddingBottom: '8px',
+                borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
+              }}
+            >
+              <span style={{ color: '#64748b' }}>{row.label}</span>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                <span style={{ color: '#f1f5f9', fontWeight: 700 }}>{row.value}</span>
+                {row.unit && (
+                  <span style={{ fontSize: '10px', color: '#475569', fontWeight: 500 }}>{row.unit}</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{
+        padding: '12px 16px',
+        fontSize: '10px',
+        color: '#94a3b8',
+        borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+        fontFamily: '"JetBrains Mono", monospace',
+      }}>
+        分辨率: {resolution}
+      </div>
+
+      <div style={{
+        borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+        background: 'rgba(255, 255, 255, 0.02)',
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: 0,
+      }}>
+        <div style={{
+          padding: '10px 16px',
+          fontSize: '10px',
+          color: '#94a3b8',
+          letterSpacing: '0.2em',
+          textTransform: 'uppercase',
+          fontWeight: 700,
+        }}>
+          运行日志
+        </div>
+        <div style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: '0 16px 12px',
+          fontFamily: '"JetBrains Mono", monospace',
+          fontSize: '11px',
+          color: '#94a3b8',
+        }}>
+          {logs.length === 0 ? (
+            <div style={{ color: '#64748b' }}>等待日志数据...</div>
+          ) : (
+            logs.map((log, index) => (
+              <div key={`${log.timestamp}-${index}`} style={{ display: 'flex', gap: '6px', lineHeight: 1.6 }}>
+                <span style={{ color: '#475569', whiteSpace: 'nowrap' }}>
+                  {new Date(log.timestamp * 1000).toLocaleTimeString([], { hour12: false, minute: '2-digit', second: '2-digit' })}
+                </span>
+                <span style={{ color: '#64748b' }}>[{log.module}]</span>
+                <span style={{ color: log.level === 'error' ? '#f87171' : log.level === 'warning' ? '#f59e0b' : '#34d399' }}>
+                  {log.message}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </aside>
   );
 }
 // ==================== 中央视频区域 ====================
 function VideoSection({
-  attitude,
-  altitude,
-  groundspeed,
   isFullscreen,
   videoRef,
   whepStatus,
-  isConnected
+  isConnected,
+  resolutionLabel,
+  rssi
 }: {
-  attitude?: { pitch: number; roll: number; yaw: number };
-  altitude?: number;
-  groundspeed?: number;
   isFullscreen: boolean;
   videoRef: React.RefObject<HTMLVideoElement | null>;
   whepStatus: { status: string; error: string | null };
   isConnected: boolean;
+  resolutionLabel: string;
+  rssi: string;
 }) {
-  const getHeadingDisplay = () => {
-    if (!attitude) return "184° / 南";
-    const heading = Math.round(attitude.yaw);
-    const directions = ["北", "东北", "东", "东南", "南", "西南", "西", "西北"];
-    const index = Math.round(heading / 45) % 8;
-    return `${heading}° / ${directions[index]}`;
-  };
-
-  const alt = altitude || 1.2;
-  const speed = groundspeed || 0.8;
 
   const whepConfig: any = {
     'disconnected': { color: '#ef4444', text: '未连接' },
@@ -243,8 +291,8 @@ function VideoSection({
     } : {
       flex: 1,
       background: 'black',
-      border: '1px solid ' + (isConnected ? 'rgba(16, 185, 129, 0.3)' : 'rgba(255, 255, 255, 0.05)'),
-      borderRadius: '8px',
+      borderLeft: '1px solid rgba(255, 255, 255, 0.1)',
+      borderRight: '1px solid rgba(255, 255, 255, 0.1)',
       position: 'relative',
     }}>
       <video
@@ -255,7 +303,7 @@ function VideoSection({
         style={{
           width: '100%',
           height: '100%',
-          objectFit: 'contain',
+          objectFit: 'cover',
           background: 'black',
         }}
       />
@@ -271,7 +319,7 @@ function VideoSection({
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'rgba(15, 23, 42, 0.9)',
+          background: 'rgba(15, 23, 42, 0.88)',
           zIndex: 5,
         }}>
           <div style={{ fontSize: '48px', marginBottom: '1rem', opacity: 0.5 }}>📹</div>
@@ -300,37 +348,40 @@ function VideoSection({
         position: 'absolute',
         top: '16px',
         left: '16px',
-        display: 'flex',
-        gap: '8px',
         zIndex: 10,
       }}>
         <div style={{
-          background: 'rgba(37, 99, 235, 0.2)',
-          color: '#60a5fa',
-          padding: '4px 8px',
-          borderRadius: '4px',
-          fontSize: '9px',
-          fontWeight: 'bold',
-          border: `1px solid rgba(59, 130, 246, 0.3)`,
+          background: 'rgba(0, 0, 0, 0.6)',
+          borderLeft: '2px solid #3b82f6',
+          padding: '10px 12px',
+          fontFamily: '"JetBrains Mono", monospace',
+          fontSize: '10px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '6px',
         }}>
-          {(() => {
-            const width = Number(import.meta.env.VITE_STREAM_WIDTH || 1920);
-            const label = width === 1280 ? '720p' : '1080p';
-            return `${label} 实时流`;
-          })()}
-        </div>
-        <div style={{
-          background: 'rgba(255, 255, 255, 0.05)',
-          color: currentWhepStatus.color,
-          padding: '4px 8px',
-          borderRadius: '4px',
-          fontSize: '9px',
-          fontWeight: 'bold',
-        }}>
-          {currentWhepStatus.text}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ color: 'rgba(255, 255, 255, 0.4)', textTransform: 'uppercase' }}>当前清晰度:</span>
+            <span style={{ color: '#e2e8f0', fontWeight: 700 }}>{resolutionLabel}</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ color: 'rgba(255, 255, 255, 0.4)', textTransform: 'uppercase' }}>连接状态:</span>
+            <span style={{ color: currentWhepStatus.color, fontWeight: 700 }}>
+              {currentWhepStatus.text}
+            </span>
+          </div>
+          <div style={{
+            paddingTop: '6px',
+            borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+            color: 'rgba(255, 255, 255, 0.35)',
+            textTransform: 'uppercase',
+          }}>
+            信号强度: {rssi} dBm
+          </div>
         </div>
         {isFullscreen && (
           <div style={{
+            marginTop: '8px',
             background: 'rgba(255, 255, 255, 0.05)',
             color: '#94a3b8',
             padding: '4px 8px',
@@ -343,229 +394,7 @@ function VideoSection({
         )}
       </div>
 
-      {/* HUD 仪表 */}
-      <div style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        pointerEvents: 'none',
-        zIndex: 50,
-      }}>
-        <div style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          width: '300px',
-          height: '300px',
-          transform: 'translate(-50%, -50%)',
-          border: '1px solid rgba(255, 255, 255, 0.05)',
-          borderRadius: '50%',
-        }} />
-        <div style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          width: '240px',
-          height: '1px',
-          background: 'rgba(255, 255, 255, 0.2)',
-          transform: `translate(-50%, -50%) rotate(${attitude?.roll || 0}deg)`,
-        }} />
-        <div style={{
-          position: 'absolute',
-          left: '40px',
-          top: '50%',
-          transform: 'translateY(-50%)',
-          height: '160px',
-          width: '48px',
-          borderLeft: '1px solid rgba(255, 255, 255, 0.1)',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          padding: '8px 0',
-        }}>
-          <span style={{ fontSize: '10px', fontFamily: '"JetBrains Mono", monospace', color: 'rgba(255, 255, 255, 0.4)' }}>
-            {(alt + 0.3).toFixed(1)}米
-          </span>
-          <span style={{ fontSize: '10px', fontFamily: '"JetBrains Mono", monospace', color: 'rgba(255, 255, 255, 0.8)', fontWeight: 'bold' }}>
-            {alt.toFixed(1)}米
-          </span>
-          <span style={{ fontSize: '10px', fontFamily: '"JetBrains Mono", monospace', color: 'rgba(255, 255, 255, 0.4)' }}>
-            {(alt - 0.3).toFixed(1)}米
-          </span>
-        </div>
-        <div style={{
-          position: 'absolute',
-          right: '40px',
-          top: '50%',
-          transform: 'translateY(-50%)',
-          height: '160px',
-          width: '48px',
-          borderRight: '1px solid rgba(255, 255, 255, 0.1)',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          padding: '8px 0',
-          textAlign: 'right',
-        }}>
-          <span style={{ fontSize: '10px', fontFamily: '"JetBrains Mono", monospace', color: 'rgba(255, 255, 255, 0.4)' }}>
-            {(speed + 0.4).toFixed(1)} 米/秒
-          </span>
-          <span style={{ fontSize: '10px', fontFamily: '"JetBrains Mono", monospace', color: 'rgba(255, 255, 255, 0.8)', fontWeight: 'bold' }}>
-            {speed.toFixed(1)} 米/秒
-          </span>
-          <span style={{ fontSize: '10px', fontFamily: '"JetBrains Mono", monospace', color: 'rgba(255, 255, 255, 0.4)' }}>
-            {(speed - 0.4).toFixed(1)} 米/秒
-          </span>
-        </div>
-        <div style={{
-          position: 'absolute',
-          bottom: '24px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          display: 'flex',
-          gap: '40px',
-          alignItems: 'center',
-          background: 'rgba(0, 0, 0, 0.4)',
-          padding: '8px 24px',
-          borderRadius: '9999px',
-          border: '1px solid rgba(255, 255, 255, 0.05)',
-        }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <span style={{ fontSize: '8px', color: '#64748b', textTransform: 'uppercase', fontWeight: 'bold' }}>
-              巡检模式
-            </span>
-            <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#60a5fa' }}>
-              全自动巡航
-            </span>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', borderLeft: '1px solid rgba(255, 255, 255, 0.1)', paddingLeft: '40px' }}>
-            <span style={{ fontSize: '8px', color: '#64748b', textTransform: 'uppercase', fontWeight: 'bold' }}>
-              航向角
-            </span>
-            <span style={{ fontSize: '10px', fontWeight: 'bold', fontFamily: '"JetBrains Mono", monospace' }}>
-              {getHeadingDisplay()}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <div style={{
-        position: 'absolute',
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%, -50%)',
-        opacity: 0.05,
-        fontSize: '160px',
-        pointerEvents: 'none',
-      }}>
-        ✚
-      </div>
     </section>
-  );
-}
-
-// ==================== 右侧栏 ====================
-function RightPanel({
-  motors,
-  logs
-}: {
-  motors: Array<{ name: string; temp_c: number; current_a: number; load_pct: number }>;
-  logs: Array<{ timestamp: number; level: 'info' | 'warning' | 'error'; module: string; message: string }>;
-}) {
-  return (
-    <aside style={{
-      width: '256px',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '16px',
-    }}>
-      <div style={{
-        background: 'rgba(26, 29, 35, 0.9)',
-        border: '1px solid rgba(255, 255, 255, 0.05)',
-        borderRadius: '8px',
-        padding: '16px',
-      }}>
-        <h3 style={{ fontSize: '10px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '12px' }}>
-          执行器状态
-        </h3>
-        {motors.length === 0 ? (
-          <div style={{ fontSize: '10px', color: '#64748b', textAlign: 'center', padding: '1rem' }}>
-            等待电机数据...
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {motors.map((motor, index) => (
-              <div key={index}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '10px' }}>
-                  <span style={{ color: '#64748b' }}>{motor.name}</span>
-                  <span style={{ fontFamily: '"JetBrains Mono", monospace' }}>
-                    <span style={{ color: motor.temp_c > 42 ? '#ef4444' : motor.temp_c > 38 ? '#f59e0b' : '#64748b' }}>
-                      {motor.temp_c.toFixed(1)}°C
-                    </span> / <span style={{ color: '#64748b' }}>{motor.current_a.toFixed(1)}A</span>
-                  </span>
-                </div>
-                <div style={{ width: '100%', background: 'rgba(255, 255, 255, 0.05)', height: '4px', borderRadius: '9999px', overflow: 'hidden' }}>
-                  <div style={{
-                    background: motor.load_pct > 80 ? '#ef4444' : motor.load_pct > 60 ? '#f59e0b' : '#3b82f6',
-                    height: '100%',
-                    width: `${motor.load_pct}%`,
-                  }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div style={{
-        flex: 1,
-        background: 'rgba(26, 29, 35, 0.9)',
-        border: '1px solid rgba(255, 255, 255, 0.05)',
-        borderRadius: '8px',
-        display: 'flex',
-        flexDirection: 'column',
-        minHeight: 0,
-      }}>
-        <div style={{ padding: '16px', borderBottom: '1px solid rgba(255, 255, 255, 0.05)', background: 'rgba(255, 255, 255, 0.05)' }}>
-          <h3 style={{ fontSize: '10px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '2px', margin: 0 }}>
-            系统日志
-          </h3>
-        </div>
-        <div style={{
-          flex: 1,
-          padding: '12px',
-          overflowY: 'auto',
-          fontFamily: '"JetBrains Mono", monospace',
-          fontSize: '9px',
-          color: '#64748b',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '4px',
-        }}>
-          {logs.length === 0 ? (
-            <div style={{ fontSize: '10px', color: '#64748b', textAlign: 'center', padding: '20px' }}>
-              等待日志...
-            </div>
-          ) : (
-            logs.map((log, index) => {
-              const levelColor = log.level === 'error' ? '#ef4444' : log.level === 'warning' ? '#f59e0b' : '#64748b';
-              return (
-                <div key={index} style={{ display: 'flex', gap: '8px' }}>
-                  <span style={{ color: 'rgba(255, 255, 255, 0.2)', flexShrink: 0 }}>
-                    {new Date(log.timestamp * 1000).toLocaleTimeString('zh-CN', { hour12: false })}
-                  </span>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: levelColor }}>
-                    [{log.module}] {log.message}
-                  </span>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
-    </aside>
   );
 }
 
@@ -585,13 +414,15 @@ function FooterBar({ systemStatus, isConnected }: { systemStatus: { status: stri
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
-      padding: '4px 16px',
+      padding: '6px 24px',
       fontSize: '9px',
       color: '#475569',
       textTransform: 'uppercase',
       letterSpacing: '2px',
+      borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+      background: '#0a0c10',
     }}>
-      <div style={{ display: 'flex', gap: '16px' }}>
+      <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: config.color }}>
           {config.icon} {config.text}
         </span>
@@ -607,13 +438,19 @@ export default function IndustrialConsoleComplete() {
   const {
     telemetry,
     isConnected,
-    snapshots,
-    logs,
     systemStatus,
+    logs,
+    addLog,
     triggerEmergencyStop,
     connect: connectWs,
     disconnect: disconnectWs,
   } = useBotDogWebSocket();
+
+  const startupLoggedRef = useRef(false);
+  const lastWsStatusRef = useRef<boolean | null>(null);
+  const lastWhepStatusRef = useRef<string | null>(null);
+  const wsDelayTimerRef = useRef<number | null>(null);
+  const whepDelayTimerRef = useRef<number | null>(null);
 
   const { status: whepStatus, videoRef, connect: connectWhep, disconnect: disconnectWhep } = useWhepVideo();
 
@@ -634,6 +471,77 @@ export default function IndustrialConsoleComplete() {
       disconnectWhep();
     };
   }, []);
+
+  useEffect(() => {
+    if (startupLoggedRef.current) return;
+    startupLoggedRef.current = true;
+    addLog('系统启动检查开始', 'info', 'STARTUP');
+  }, [addLog]);
+
+  useEffect(() => {
+    if (lastWsStatusRef.current === isConnected) {
+      return;
+    }
+    lastWsStatusRef.current = isConnected;
+
+    if (isConnected) {
+      if (wsDelayTimerRef.current) {
+        window.clearTimeout(wsDelayTimerRef.current);
+        wsDelayTimerRef.current = null;
+      }
+      addLog('遥测链路已连接', 'info', 'WS');
+      return;
+    }
+
+    if (wsDelayTimerRef.current) {
+      window.clearTimeout(wsDelayTimerRef.current);
+    }
+    wsDelayTimerRef.current = window.setTimeout(() => {
+      if (!isConnected) {
+        addLog('遥测链路未连接', 'error', 'WS');
+      }
+      wsDelayTimerRef.current = null;
+    }, 3000);
+  }, [isConnected, addLog]);
+
+  useEffect(() => {
+    if (lastWhepStatusRef.current === whepStatus.status) {
+      return;
+    }
+    lastWhepStatusRef.current = whepStatus.status;
+
+    if (whepStatus.status === 'connected') {
+      if (whepDelayTimerRef.current) {
+        window.clearTimeout(whepDelayTimerRef.current);
+        whepDelayTimerRef.current = null;
+      }
+      addLog('视频流连接成功', 'info', 'WHEP');
+      return;
+    }
+
+    if (whepStatus.status === 'connecting') {
+      addLog('视频流连接中', 'info', 'WHEP');
+      return;
+    }
+
+    if (whepDelayTimerRef.current) {
+      window.clearTimeout(whepDelayTimerRef.current);
+    }
+
+    if (whepStatus.status === 'error') {
+      addLog(`视频流连接失败: ${whepStatus.error || '未知错误'}`, 'error', 'WHEP');
+      return;
+    }
+
+    if (whepStatus.status === 'disconnected') {
+      whepDelayTimerRef.current = window.setTimeout(() => {
+        if (whepStatus.status === 'disconnected') {
+          addLog('视频流未连接', 'warning', 'WHEP');
+        }
+        whepDelayTimerRef.current = null;
+      }, 3000);
+    }
+  }, [whepStatus.status, whepStatus.error, addLog]);
 
   // 全屏切换函数
   const toggleFullscreen = () => {
@@ -672,9 +580,13 @@ export default function IndustrialConsoleComplete() {
     };
   }, []);
 
+  const resolutionWidth = Number(import.meta.env.VITE_STREAM_WIDTH || 1920);
+  const resolutionLabel = resolutionWidth === 1280 ? '1280x720' : '1920x1080';
+  const resolutionChip = resolutionWidth === 1280 ? '720p' : '1080p';
+
   return (
     <div style={{
-      backgroundColor: '#0f1115',
+      backgroundColor: '#0a0c10',
       color: '#f1f5f9',
       fontFamily: '"Inter", -apple-system, "Microsoft YaHei", sans-serif',
       overflow: 'hidden',
@@ -682,39 +594,45 @@ export default function IndustrialConsoleComplete() {
       display: 'flex',
       flexDirection: 'column',
       margin: 0,
-      padding: isFullscreen ? 0 : '20px',
-      gap: '16px',
+      padding: isFullscreen ? 0 : '16px',
+      gap: '12px',
     }}>
       <HeaderBar
         latency={telemetry ? `${telemetry.latency_ms}ms` : '--'}
-        rssi={telemetry ? `${telemetry.rssi_dbm} dBm` : '--'}
         temperature={telemetry ? `${telemetry.core_temp_c.toFixed(1)}°C` : '--'}
         battery={telemetry ? `${telemetry.battery_pct.toFixed(1)}%` : '--'}
         onEmergencyStop={triggerEmergencyStop}
         onToggleFullscreen={toggleFullscreen}
         onOpenConfig={() => setShowConfigPanel(true)}
-        isConnected={isConnected}
       />
 
       <main style={{
         flex: 1,
         display: 'flex',
-        gap: '16px',
+        gap: '0px',
         minHeight: 0,
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        borderRadius: '10px',
+        overflow: 'hidden',
+        background: '#0f1115',
       }}>
-        <LeftPanel snapshots={snapshots} />
+        <LeftPanel
+          latency={telemetry ? `${telemetry.latency_ms}` : '--'}
+          rssi={telemetry ? `${telemetry.rssi_dbm}` : '--'}
+          temperature={telemetry ? `${telemetry.core_temp_c.toFixed(1)}` : '--'}
+          battery={telemetry ? `${telemetry.battery_pct.toFixed(1)}` : '--'}
+          groundspeed={telemetry ? `${telemetry.position.groundspeed.toFixed(2)}` : '--'}
+          angularVel={telemetry ? `${(telemetry.attitude.yaw || 0).toFixed(1)}` : '--'}
+          resolution={resolutionLabel}
+          logs={logs}
+        />
         <VideoSection
-          attitude={telemetry?.attitude}
-          altitude={telemetry?.position.alt}
-          groundspeed={telemetry?.position.groundspeed}
           isFullscreen={isFullscreen}
           videoRef={videoRef}
           whepStatus={whepStatus}
           isConnected={isConnected}
-        />
-        <RightPanel
-          motors={telemetry?.motors || []}
-          logs={logs}
+          resolutionLabel={resolutionChip}
+          rssi={telemetry ? `${telemetry.rssi_dbm}` : '--'}
         />
       </main>
 
