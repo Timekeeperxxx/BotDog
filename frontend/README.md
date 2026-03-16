@@ -5,7 +5,6 @@
 - Vite (构建工具）
 - React 18 (UI 框架)
 - TypeScript (类型系统)
-- Zustand (状态管理)
 
 ## 开发环境
 
@@ -41,16 +40,14 @@ src/
 │   ├── BatteryIndicator.tsx # 电池状态
 │   ├── PositionPanel.tsx    # 位置信息
 │   ├── StatusBar.tsx        # 系统状态栏
-│   └── VideoPlayer.tsx      # WHEP 视频播放器
+│   └── VideoSection.tsx     # 视频与 HUD
 ├── hooks/              # 自定义 Hooks
-│   ├── useTelemetryWebSocket.ts # WebSocket 连接管理
-│   └── useWhepVideo.ts         # WHEP 播放管理
-├── stores/             # Zustand Store
-│   └── telemetryStore.ts     # 遥测数据状态管理
+│   ├── useBotDogWebSocket.ts # WebSocket 连接管理
+│   └── useWhepVideo.ts       # WHEP 播放管理
 ├── types/              # TypeScript 类型定义
-│   └── telemetry.ts          # 遥测数据类型
-├── App.tsx             # 主应用组件
-└── App.css              # 全局样式
+│   ├── telemetry.ts          # 遥测数据类型
+│   └── event.ts              # 事件类型
+└── IndustrialConsoleComplete.tsx # 主界面
 ```
 
 ## 功能特性
@@ -58,7 +55,6 @@ src/
 - ✅ WebSocket 自动连接与重连
 - ✅ 实时遥测数据显示（姿态、位置、电池）
 - ✅ WHEP 视频播放与 HUD 叠层
-- ✅ 状态持久化与状态管理
 - ✅ 响应式布局设计
 - ✅ 深色工业控制台主题
 
@@ -112,7 +108,7 @@ VITE_WHEP_URL=http://127.0.0.1:8889/cam/whep
 - 最后更新时间
 - 手动重连按钮
 
-### App
+### IndustrialConsoleComplete
 - 整合所有子组件
 - 管理 WebSocket 连接
 - 协调状态更新

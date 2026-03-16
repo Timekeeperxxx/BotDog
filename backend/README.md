@@ -431,12 +431,7 @@ MAVLINK_ENDPOINT=udp:127.0.0.1:14550
 
 ## 下一步
 
-阶段 2 计划实现：
-
-- 控制通道 WebSocket `/ws/control`
-- 急停机制 `POST /api/v1/control/e-stop`
-- 控制输入速率限制
-- MAVLink `MANUAL_CONTROL` 报文发送
+当前阶段以遥测/事件/配置为主，视频链路由 MediaMTX + FFmpeg 负责，后端不再承担信令。
 
 详见 `docs/13_implementation_plan.md`。
 

@@ -13,7 +13,7 @@ BotDog 是一个完整的**四足机器狗远程控制系统**，提供实时控
 - ✅ **遥测监控** - 实时姿态、位置、温度、电池
 - ✅ **AI 告警** - 温度异常自动检测和告警
 - ✅ **配置管理** - 可视化配置界面，13 个配置项
-- ✅ **视频流** - MediaMTX + WHEP 低延迟视频传输
+- ✅ **视频流** - RTSP(H.265) → FFmpeg(H.264) → MediaMTX(WHEP)
 - ✅ **事件系统** - 实时事件推送和历史记录
 
 ### 技术栈
@@ -23,15 +23,18 @@ BotDog 是一个完整的**四足机器狗远程控制系统**，提供实时控
 - FastAPI（Web 框架）
 - SQLAlchemy（ORM）
 - WebSocket（实时通信）
-- MediaMTX + WHEP（视频流）
 - MAVLink（机器人通信协议）
+
+**视频流链路**:
+- FFmpeg（H.265 → H.264 转码）
+- MediaMTX（RTSP → WHEP 网关）
+- WHEP（浏览器 WebRTC 播放）
 
 **前端**:
 - React 18
 - TypeScript
 - Vite（构建工具）
 - WebSocket（实时数据）
-- MediaMTX + WHEP（视频流）
 
 ---
 
@@ -67,29 +70,17 @@ npm install
 ### 3. 启动服务
 
 ```bash
-# 激活虚拟环境（如果尚未激活）
-source .venv/bin/activate  # Linux/Mac
-
-# 后端（终端 1）- 从项目根目录启动
-uvicorn backend.main:app --host 0.0.0.0 --port 8000
-
-# 或者进入 backend 目录启动
-cd backend
-uvicorn main:app --host 0.0.0.0 --port 8000
-
-
-#win后端启动方案：
+# 后端（终端 1）
 .venv/Scripts/python.exe run_backend.py
 
-# 前端（终端 2）- 新开一个终端
+# 前端（终端 2）
 cd frontend
 npm run dev
 ```
 
 > **重要**：
 > - 后端必须使用 `--host 0.0.0.0` 监听所有网卡，否则外部设备无法连接
-> - 生产环境可以去掉 `--reload` 参数，提高性能
-> - 如果端口被占用，可以使用 `--port 8001` 等其他端口
+> - 默认前端端口为 5174
 
 ### 4. 访问界面
 
@@ -97,7 +88,7 @@ npm run dev
 
 ---
 
-## 视频流获取指南
+## 视频流与技术栈转换
 
 ### 视频流架构
 
@@ -117,45 +108,23 @@ npm run dev
 ### 本机低延迟播放（推荐）
 
 **步骤**：
-1. 运行 MediaMTX：`run-pipeline.cmd`
-2. 运行 FFmpeg 推流：`ffmpeg-supervisor.cmd`
-3. 打开静态页面 `http://127.0.0.1:8090/index.html` 或前端 `npm run dev`
+1. 一键启动：`run-pipeline.cmd`
+2. 前端访问：`http://127.0.0.1:5174` 或 `http://YOUR_IP:5174`
 
 **默认配置**：
 - 相机 RTSP：`CAMERA_RTSP_URL=rtsp://192.168.144.25:8554/main.264`
 - MediaMTX RTSP：`rtsp://127.0.0.1:8554/cam`
 - WHEP：`http://127.0.0.1:8889/cam/whep`
 
-### FFmpeg 推流命令（手动）
+### 重连机制说明
 
-```bash
-ffmpeg -rtsp_transport tcp -i rtsp://<CAMERA_IP>:8554/main.264 \
-  -fflags nobuffer -flags low_delay -an \
-  -c:v libx264 -preset ultrafast -tune zerolatency -g 30 -keyint_min 30 \
-  -f rtsp rtsp://127.0.0.1:8554/cam
-```
+- FFmpeg 断流会自动重启（脚本内置看门狗）。
+- 前端 WHEP 连接断开后会自动重连。
 
 ### WHEP 测试页
 
 - `web/index.html` 用于快速验证 WHEP 播放。
 - 可在输入框中修改 WHEP URL。
-
-### 故障排查
-
-**问题 1：WHEP 无法连接**
-- 确认 MediaMTX 正在运行并监听 8889
-- 检查浏览器控制台是否有 CORS/ICE 错误
-- 确认 `VITE_WHEP_URL` 与 WHEP 地址一致
-
-**问题 2：没有视频流**
-- 确认 FFmpeg 进程运行中
-- 相机 RTSP 地址是否可达
-- MediaMTX 日志中应看到 `path cam` 有发布者
-
-**问题 3：延迟过高**
-- 降低 FFmpeg 输出分辨率/码率
-- 检查网络带宽与丢包情况
-- 减少相机编码 GOP 间隔（如可配置）
 
 ---
 
