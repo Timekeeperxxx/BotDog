@@ -35,6 +35,8 @@ import {
   Clock,
   MapPin,
   Trash2,
+  ArrowLeftRight,
+  X,
 } from 'lucide-react';
 
 interface EvidenceItem {
@@ -191,6 +193,20 @@ export default function IndustrialConsoleComplete() {
   } = useWhepVideo();
   const connectWhepRef = useRef(connectWhep);
 
+  // 第二路摄像头 (PiP)
+  const CAM2_WHEP_URL = 'http://127.0.0.1:8889/cam2/whep';
+  const {
+    status: whepStatus2,
+    videoRef: videoRef2,
+    connect: connectWhep2,
+    disconnect: disconnectWhep2,
+  } = useWhepVideo(CAM2_WHEP_URL);
+  // isCamSwapped: false = cam1主画面+cam2 PiP, true = cam2主画面+cam1 PiP
+  const [isCamSwapped, setIsCamSwapped] = useState(false);
+  // PiP 窗口状态
+  const [isPipLarge, setIsPipLarge] = useState(false);  // false=240×135, true=480×270
+  const [isPipHidden, setIsPipHidden] = useState(false); // 折叠到右下角图标
+
   const [isUiFullscreen, setIsUiFullscreen] = useState(false);
   const [showConfigPanel, setShowConfigPanel] = useState(false);
   const [missionTaskId, setMissionTaskId] = useState<number | null>(null);
@@ -291,6 +307,7 @@ export default function IndustrialConsoleComplete() {
   // WebSocket 连接
   useEffect(() => { connectWs(); return () => { disconnectWs(); }; }, []);
   useEffect(() => { connectWhep(); return () => { disconnectWhep(); }; }, []);
+  useEffect(() => { connectWhep2(); return () => { disconnectWhep2(); }; }, []);
 
   useEffect(() => {
     connectWhepRef.current = connectWhep;
@@ -497,43 +514,63 @@ export default function IndustrialConsoleComplete() {
           <div className="flex-1 flex min-h-0 relative">
             {/* 视频监控区 */}
             <div className={`flex-1 bg-black relative overflow-hidden transition-all duration-300 ${isUiFullscreen ? 'fixed inset-0 z-[100]' : 'border-r border-white/20'}`}>
+              {/* CAM1 video - single element, CSS determines main vs PiP position */}
               <video
                 ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-full object-cover bg-black"
+                autoPlay playsInline muted
+                className="absolute object-cover bg-black transition-all duration-300"
+                style={isCamSwapped ? {
+                  bottom: '108px', right: '16px', top: 'auto', left: 'auto',
+                  width: isPipLarge ? '480px' : '240px',
+                  height: isPipLarge ? '270px' : '135px',
+                  zIndex: 21, borderRadius: '8px',
+                  display: isPipHidden ? 'none' : undefined,
+                } : {
+                  inset: 0, width: '100%', height: '100%', zIndex: 1, borderRadius: 0,
+                }}
+              />
+              {/* CAM2 video - single element */}
+              <video
+                ref={videoRef2}
+                autoPlay playsInline muted
+                className="absolute object-cover bg-black transition-all duration-300"
+                style={isCamSwapped ? {
+                  inset: 0, width: '100%', height: '100%', zIndex: 1, borderRadius: 0,
+                } : {
+                  bottom: '108px', right: '16px', top: 'auto', left: 'auto',
+                  width: isPipLarge ? '480px' : '240px',
+                  height: isPipLarge ? '270px' : '135px',
+                  zIndex: 21, borderRadius: '8px',
+                  display: isPipHidden ? 'none' : undefined,
+                }}
               />
 
-              {/* 视频未连接遮罩 */}
-              {whepStatus.status !== 'connected' && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/88 z-5">
-                  <div className="text-5xl mb-4 opacity-50">
-                    {whepStatus.status === 'connecting' ? (
-                      <div className="w-12 h-12 rounded-full border-4 border-slate-200/20 border-t-slate-200 mx-auto" style={{ animation: 'videoSpin 1s linear infinite' }} />
-                    ) : whepStatus.status === 'error' ? (
-                      <span className="text-red-400 font-bold">x</span>
-                    ) : (
-                      <Camera size={48} className="text-white/30" />
-                    )}
-                  </div>
-                  <div className="text-lg font-bold text-slate-200 mb-2">视频流 {currentWhep.text}</div>
-                  {whepStatus.error && (
-                    <div className="text-sm text-red-500 mb-4 px-4 py-2 bg-red-500/10 rounded">
-                      {whepStatus.error}
+              {/* Main area disconnect overlay */}
+              {(() => {
+                const mainStatus = isCamSwapped ? whepStatus2 : whepStatus;
+                const mainConnect = isCamSwapped ? connectWhep2 : connectWhep;
+                if (mainStatus.status === 'connected') return null;
+                return (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/88 z-5">
+                    <div className="text-5xl mb-4 opacity-50">
+                      {mainStatus.status === 'connecting' ? (
+                        <div className="w-12 h-12 rounded-full border-4 border-slate-200/20 border-t-slate-200 mx-auto" style={{ animation: 'videoSpin 1s linear infinite' }} />
+                      ) : mainStatus.status === 'error' ? (
+                        <span className="text-red-400 font-bold">x</span>
+                      ) : (
+                        <Camera size={48} className="text-white/30" />
+                      )}
                     </div>
-                  )}
-                  <div className="text-xs text-slate-500">
-                    {isConnected ? '等待WHEP连接...' : '等待后端连接...'}
+                    <div className="text-lg font-bold text-slate-200 mb-2">视频流 {mainStatus.status === 'connecting' ? '连接中...' : mainStatus.error || '未连接'}</div>
+                    {mainStatus.error && (
+                      <div className="text-sm text-red-500 mb-4 px-4 py-2 bg-red-500/10 rounded">{mainStatus.error}</div>
+                    )}
+                    <div className="text-xs text-slate-500">{isConnected ? '等待WHEP连接...' : '等待后端连接...'}</div>
+                    <button onClick={mainConnect} className="mt-4 px-4 py-2 text-[10px] font-black uppercase tracking-widest border border-white/20 text-white/80 hover:text-white hover:border-white/60 transition-all">重新连接</button>
                   </div>
-                  <button
-                    onClick={connectWhep}
-                    className="mt-4 px-4 py-2 text-[10px] font-black uppercase tracking-widest border border-white/20 text-white/80 hover:text-white hover:border-white/60 transition-all"
-                  >
-                    重新连接
-                  </button>
-                </div>
-              )}
+                );
+              })()}
+
 
               {/* HUD 叠加 */}
               <div className="absolute inset-0 pointer-events-none p-6">
@@ -611,6 +648,92 @@ export default function IndustrialConsoleComplete() {
                   </div>
                 </div>
               )}
+
+              {/* PiP overlay: border, badges, masks, controls */}
+              {!isUiFullscreen && (() => {
+                const pipStatus = isCamSwapped ? whepStatus : whepStatus2;
+                const pipLabel = isCamSwapped ? 'CAM1' : 'CAM2';
+                const pipW = isPipLarge ? 480 : 240;
+                const pipH = isPipLarge ? 270 : 135;
+
+                // Collapsed state: show a small restore button
+                if (isPipHidden) {
+                  return (
+                    <div
+                      className="absolute z-30 flex items-center justify-center cursor-pointer group/pip-restore"
+                      style={{ bottom: '108px', right: '16px', width: '48px', height: '48px' }}
+                      onClick={() => setIsPipHidden(false)}
+                      title="恢复画中画"
+                    >
+                      <div className="w-full h-full rounded-xl bg-black/80 border-2 border-white/20 group-hover/pip-restore:border-white/60 flex items-center justify-center transition-all shadow-lg">
+                        <Camera size={20} className="text-white/60 group-hover/pip-restore:text-white transition-colors" />
+                      </div>
+                      <div className={`absolute top-1 right-1 w-2 h-2 rounded-full ${
+                        pipStatus.status === 'connected' ? 'bg-emerald-500' :
+                        pipStatus.status === 'connecting' ? 'bg-amber-500 animate-pulse' : 'bg-red-500'
+                      }`} />
+                    </div>
+                  );
+                }
+
+                return (
+                  <div
+                    className="absolute z-30 cursor-pointer group/pip transition-all duration-300"
+                    style={{ bottom: '108px', right: '16px', width: `${pipW}px`, height: `${pipH}px` }}
+                    onClick={() => setIsPipLarge(v => !v)}
+                    title={isPipLarge ? '缩小画中画' : '放大画中画'}
+                  >
+                    {/* visible border */}
+                    <div className="absolute inset-0 rounded-lg border-2 border-white/25 group-hover/pip:border-white/60 shadow-[0_4px_30px_rgba(0,0,0,0.8)] transition-colors pointer-events-none" />
+
+                    {/* status badge (top-left) */}
+                    <div className="absolute top-1.5 left-1.5 flex items-center space-x-1.5 bg-black/65 px-2 py-0.5 rounded text-[8px] font-mono font-black uppercase tracking-wider pointer-events-none">
+                      <div className={`w-1.5 h-1.5 rounded-full ${
+                        pipStatus.status === 'connected' ? 'bg-emerald-500' :
+                        pipStatus.status === 'connecting' ? 'bg-amber-500 animate-pulse' : 'bg-red-500'
+                      }`} />
+                      <span className="text-white/75">{pipLabel}</span>
+                    </div>
+
+                    {/* hide button (top-right) */}
+                    <button
+                      className="absolute top-1.5 right-1.5 w-5 h-5 flex items-center justify-center bg-black/60 hover:bg-white/20 rounded transition-colors z-10"
+                      onClick={(e) => { e.stopPropagation(); setIsPipHidden(true); }}
+                      title="隐藏画中画"
+                    >
+                      <X size={10} className="text-white/75" />
+                    </button>
+
+                    {/* size indicator (center-bottom, on hover) */}
+                    <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 opacity-0 group-hover/pip:opacity-100 transition-opacity bg-black/60 px-1.5 py-0.5 rounded pointer-events-none">
+                      <span className="text-[8px] font-mono text-white/60">{isPipLarge ? '480×270' : '240×135'}</span>
+                    </div>
+
+                    {/* swap button (bottom-right) */}
+                    <button
+                      className="absolute bottom-1.5 right-1.5 w-5 h-5 flex items-center justify-center bg-black/60 hover:bg-white/20 rounded transition-colors z-10"
+                      onClick={(e) => { e.stopPropagation(); setIsCamSwapped(v => !v); }}
+                      title="互换主画面与画中画"
+                    >
+                      <ArrowLeftRight size={10} className="text-white/75" />
+                    </button>
+
+                    {/* disconnect mask */}
+                    {pipStatus.status !== 'connected' && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 rounded-lg pointer-events-none">
+                        {pipStatus.status === 'connecting' ? (
+                          <div className="w-6 h-6 rounded-full border-2 border-white/20 border-t-white" style={{ animation: 'videoSpin 1s linear infinite' }} />
+                        ) : <Camera size={20} className="text-white/30" />}
+                        <span className="text-[9px] mt-1.5 font-bold text-white/40">
+                          {pipStatus.status === 'connecting' ? '连接中' : pipStatus.error || '未连接'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+
 
               {/* 底部浮动控制栏 */}
               <div className="absolute bottom-8 left-1/2 -translate-x-1/2 w-full max-w-lg px-6 z-30 pointer-events-auto">

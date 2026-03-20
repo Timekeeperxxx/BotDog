@@ -9,7 +9,7 @@ export interface WhepState {
 
 const DEFAULT_WHEP_URL = 'http://127.0.0.1:8889/cam/whep';
 
-export function useWhepVideo() {
+export function useWhepVideo(customWhepUrl?: string) {
   const [state, setState] = useState<WhepState>({
     status: 'disconnected',
     error: null,
@@ -77,7 +77,7 @@ export function useWhepVideo() {
     const sessionId = connectSessionIdRef.current + 1;
     connectSessionIdRef.current = sessionId;
 
-    const whepUrl = (import.meta.env.VITE_WHEP_URL as string | undefined) || DEFAULT_WHEP_URL;
+    const whepUrl = customWhepUrl || (import.meta.env.VITE_WHEP_URL as string | undefined) || DEFAULT_WHEP_URL;
 
     connectingRef.current = true;
     setState({ status: 'connecting', error: null });

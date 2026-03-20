@@ -27,3 +27,6 @@ webrtcAdditionalHosts:
 paths:
   cam:
     source: publisher
+  cam2:
+    source: rtsp://192.168.144.26:8554/main.264
+    sourceProtocol: tcp
