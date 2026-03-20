@@ -188,19 +188,20 @@ export function useBotDogWebSocket() {
           return;
         }
 
-        // 尝试重连
-        if (reconnectAttemptsRef.current < 10) {
-          reconnectAttemptsRef.current++;
-          const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current - 1), 10000);
-          console.log(`⏳ 将在 ${delay}ms 后重连 (尝试 ${reconnectAttemptsRef.current}/10)`);
-
-          reconnectTimeoutRef.current = window.setTimeout(() => {
-            connect();
-          }, delay);
-        } else {
-          console.error('❌ WebSocket重连次数已达上限');
-          setSystemStatus(prev => ({ ...prev, status: 'DISCONNECTED' }));
+        // 指数退避重连：前 10 次加速上升，之后重置计数以 10s 间隔持续重试
+        // 后端重启后无需刷新页面即可自动恢复
+        if (reconnectAttemptsRef.current >= 10) {
+          // 达到上限后重置，以最大间隔无限持续重试
+          reconnectAttemptsRef.current = 0;
+          console.log('🔄 WebSocket重连计数已重置，继续以10s间隔持续重试');
         }
+        reconnectAttemptsRef.current++;
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current - 1), 10000);
+        console.log(`⏳ 将在 ${delay}ms 后重连 (尝试 ${reconnectAttemptsRef.current})`);
+
+        reconnectTimeoutRef.current = window.setTimeout(() => {
+          connect();
+        }, delay);
       };
     } catch (error) {
       console.error('❌ 创建WebSocket连接失败:', error);

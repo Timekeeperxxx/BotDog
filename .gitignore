@@ -54,8 +54,23 @@ db/
 # Logs
 *.log
 
-# Tools
+# Files
 /tools/
+/scripts/
+/tests/
+/edge/
+
+# AI Model weights (large files, distribute separately)
+*.pt
+*.pth
+*.onnx
+*.tflite
+
+# Runtime logs
+logs/
+
+# Secrets (never commit)
+backend/.env
 
 # OS
 .DS_Store
@@ -69,3 +84,7 @@ Thumbs.db
 *.bak
 *.swp
 *~.nib
+
+
+
+

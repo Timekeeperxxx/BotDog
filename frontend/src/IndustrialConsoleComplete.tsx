@@ -8,6 +8,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useBotDogWebSocket } from './hooks/useBotDogWebSocket';
 import { useWhepVideo } from './hooks/useWhepVideo';
 import { ConfigPanel } from './components/ConfigPanel';
+import { ControlPad } from './components/ControlPad';
 import { useEventWebSocket } from './hooks/useEventWebSocket';
 import { getApiUrl } from './config/api';
 import {
@@ -174,14 +175,22 @@ export default function IndustrialConsoleComplete() {
   const sidebarLogEndRef = useRef<HTMLDivElement | null>(null);
   const tabSwitchRef = useRef(false);
 
-  const { status: whepStatus, videoRef, videoLatencyMs, connect: connectWhep, disconnect: disconnectWhep } = useWhepVideo();
+  const {
+    status: whepStatus,
+    videoRef,
+    videoLatencyMs,
+    videoResolution,
+    connect: connectWhep,
+    disconnect: disconnectWhep,
+  } = useWhepVideo();
   const connectWhepRef = useRef(connectWhep);
 
   const [isUiFullscreen, setIsUiFullscreen] = useState(false);
   const [showConfigPanel, setShowConfigPanel] = useState(false);
   const [missionTaskId, setMissionTaskId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<'console' | 'history'>('console');
-  const [isLogExpanded, setIsLogExpanded] = useState(true);
+  const [isLogExpanded, setIsLogExpanded] = useState(false);
+  const [isAiStatsExpanded, setIsAiStatsExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [evidenceItems, setEvidenceItems] = useState<EvidenceItem[]>([]);
   const [evidenceLoading, setEvidenceLoading] = useState(false);
@@ -191,7 +200,7 @@ export default function IndustrialConsoleComplete() {
 
   const fullscreenRequestedRef = useRef(false);
 
-  const isMissionRunning = systemStatus.status === 'IN_MISSION';
+  const isMissionRunning = missionTaskId !== null;
 
   const toggleMission = useCallback(async () => {
     try {
@@ -377,8 +386,7 @@ export default function IndustrialConsoleComplete() {
 
   const logRecentStatus = useMemo(() => logs.slice(-5).map(l => l.level), [logs]);
 
-  const resolutionWidth = Number(import.meta.env.VITE_STREAM_WIDTH || 1920);
-  const resolutionChip = resolutionWidth === 1280 ? '720p' : '1080p';
+  const resolutionChip = videoResolution.height ? `${videoResolution.height}p` : '--';
 
   const whepConfig: Record<string, { color: string; text: string }> = {
     disconnected: { color: 'text-red-500', text: '未连接' },
@@ -627,7 +635,7 @@ export default function IndustrialConsoleComplete() {
                           : 'bg-white text-black ring-4 ring-white/20'
                       }`}
                     >
-                      {isMissionRunning ? <><Square size={14} fill="black" /><span>终止任务</span></> : <><Play size={14} fill="black" /><span>启动巡检</span></>}
+                      {isMissionRunning ? <><Square size={14} fill="black" /><span>终止任务</span></> : <><Play size={14} fill="black" /><span>开始巡检</span></>}
                     </button>
                   </div>
                 </div>
@@ -674,6 +682,13 @@ export default function IndustrialConsoleComplete() {
                   )}
                 </div>
 
+                {/* 控制面板区 */}
+                <div className="border-t border-white/20 bg-zinc-950 shrink-0">
+                  <div className="px-3 py-2">
+                    <ControlPad isDisabled={systemStatus?.status === 'E_STOP_TRIGGERED'} />
+                  </div>
+                </div>
+
                 {/* AI 检测区 */}
                 <div className="flex-1 flex flex-col overflow-hidden">
                   <div className="p-4 border-b border-white/20 flex items-center justify-between bg-black shrink-0">
@@ -692,26 +707,36 @@ export default function IndustrialConsoleComplete() {
                       </span>
                     )}
                   </div>
-                  <div className="px-4 py-3 border-b border-white/10 bg-black/80">
-                    <div className="grid grid-cols-2 gap-3 text-[10px] font-mono text-white/80">
-                      <div className="flex items-center justify-between">
-                        <span className="text-white/50">处理帧</span>
-                        <span>{aiStatus ? aiStatus.frames_processed : '--'}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-white/50">检测数</span>
-                        <span>{aiStatus ? aiStatus.detections_count : '--'}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-white/50">命中</span>
-                        <span>{aiStatus ? aiStatus.hits : '--'}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-white/50">稳定阈值</span>
-                        <span>{aiStatus ? aiStatus.stable_hits : '--'}</span>
+                  {/* AI 统计，可折叠，默认收起 */}
+                  <div
+                    className="px-4 py-2 border-b border-white/10 bg-black/80 flex items-center justify-between cursor-pointer hover:bg-white/5 transition-all"
+                    onClick={() => setIsAiStatsExpanded(v => !v)}
+                  >
+                    <span className="text-[9px] font-black uppercase tracking-widest text-white/40">统计数据</span>
+                    {isAiStatsExpanded ? <ChevronDown size={12} className="text-white/40" /> : <ChevronUp size={12} className="text-white/40" />}
+                  </div>
+                  {isAiStatsExpanded && (
+                    <div className="px-4 py-3 border-b border-white/10 bg-black/80">
+                      <div className="grid grid-cols-2 gap-3 text-[10px] font-mono text-white/80">
+                        <div className="flex items-center justify-between">
+                          <span className="text-white/50">处理帧</span>
+                          <span>{aiStatus ? aiStatus.frames_processed : '--'}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-white/50">检测数</span>
+                          <span>{aiStatus ? aiStatus.detections_count : '--'}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-white/50">命中</span>
+                          <span>{aiStatus ? aiStatus.hits : '--'}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-white/50">稳定阈值</span>
+                          <span>{aiStatus ? aiStatus.stable_hits : '--'}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
                   <div className="px-4 py-3 border-b border-white/10 bg-black/60 flex items-center justify-between">
                     <div className="text-[10px] font-black uppercase tracking-widest text-white/70">
                       任务控制
@@ -725,7 +750,7 @@ export default function IndustrialConsoleComplete() {
                           : 'border-white/40 text-white/70 hover:border-white hover:text-white'
                       }`}
                     >
-                      {isMissionRunning ? '终止任务' : '启动巡检'}
+                      {isMissionRunning ? '终止任务' : '开始巡检'}
                     </button>
                   </div>
                   <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-zinc-900/20">
@@ -814,33 +839,43 @@ export default function IndustrialConsoleComplete() {
                     const timestamp = item.created_at || '';
                     return (
                       <div key={`${item.evidence_id}-${i}`} className="group bg-zinc-900 border-2 border-white/10 hover:border-white transition-all duration-500 rounded-2xl overflow-hidden flex flex-col shadow-[0_30px_60px_-12px_rgba(0,0,0,0.8)]">
-                        {imageSrc && (
-                          <div className="relative h-48 bg-black">
+                        {/* 顶部图片区域：始终渲染，无图时显示占位图标 */}
+                        <div className="relative h-48 bg-black shrink-0">
+                          {imageSrc ? (
                             <img src={imageSrc} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700" />
-                            <div className="absolute top-5 left-5">
-                              <span className={`px-3 py-1.5 rounded-sm font-black text-[10px] uppercase tracking-widest border-2 shadow-2xl ${
-                                item.severity === 'CRITICAL' ? 'bg-red-600 border-red-400 text-white' : 'bg-black border-white text-white'
-                              }`}>
-                                {item.severity}
-                              </span>
+                          ) : (
+                            <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-800/60">
+                              <Thermometer size={36} className="text-white/20 mb-1" />
+                              <span className="text-[9px] uppercase tracking-widest text-white/20 font-black">无截图</span>
                             </div>
-                            <div className="absolute top-5 right-5">
-                              <button
-                                onClick={() => deleteEvidenceSingle(item.evidence_id)}
-                                className="px-2 py-1 text-[9px] font-black uppercase tracking-widest border border-red-500/60 text-red-300 hover:border-red-400 hover:text-red-200 bg-black/60"
-                              >
-                                删除
-                              </button>
-                            </div>
-                            <div className="absolute bottom-4 right-4">
-                              <input
-                                type="checkbox"
-                                checked={selectedEvidence.has(item.evidence_id)}
-                                onChange={() => toggleEvidenceSelected(item.evidence_id)}
-                              />
-                            </div>
+                          )}
+                          {/* 严重性徽标 — 始终显示 */}
+                          <div className="absolute top-5 left-5">
+                            <span className={`px-3 py-1.5 rounded-sm font-black text-[10px] uppercase tracking-widest border-2 shadow-2xl ${
+                              item.severity === 'CRITICAL' ? 'bg-red-600 border-red-400 text-white' : 'bg-black border-white text-white'
+                            }`}>
+                              {item.severity}
+                            </span>
                           </div>
-                        )}
+                          {/* 删除按钮 — 始终显示 */}
+                          <div className="absolute top-5 right-5">
+                            <button
+                              onClick={() => deleteEvidenceSingle(item.evidence_id)}
+                              className="px-2 py-1 text-[9px] font-black uppercase tracking-widest border border-red-500/60 text-red-300 hover:border-red-400 hover:text-red-200 bg-black/60"
+                            >
+                              删除
+                            </button>
+                          </div>
+                          {/* 复选框 — 始终显示，修复无图证据无法批量删除的问题 */}
+                          <div className="absolute bottom-4 right-4">
+                            <input
+                              type="checkbox"
+                              checked={selectedEvidence.has(item.evidence_id)}
+                              onChange={() => toggleEvidenceSelected(item.evidence_id)}
+                              className="w-4 h-4 accent-white cursor-pointer"
+                            />
+                          </div>
+                        </div>
                         <div className="p-6 flex-1 flex flex-col bg-zinc-900">
                           <h4 className="text-sm font-black text-white tracking-wide uppercase mb-4">{item.message || item.event_code || 'AI 告警'}</h4>
                           {confidence !== undefined && (

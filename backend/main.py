@@ -21,6 +21,7 @@ from .config import settings
 from .database import get_db, init_db, get_session_factory
 from .logging_config import logger, setup_logging
 from .schemas import (
+    ControlAckDTO,
     EStopResetResponse,
     EStopResponse,
     EvidenceBulkDeleteRequest,
@@ -39,12 +40,15 @@ from .services_logs import list_logs, write_log
 from .services_tasks import create_task, stop_task
 from .alert_service import AlertService
 from .mavlink_gateway import MAVLinkGateway
-from .mavlink_dto import SystemStatusDTO
+
 from .state_machine import StateMachine, SystemState
 from .telemetry_queue import TelemetryQueueManager, set_telemetry_queue_manager
 from .workers_telemetry import TelemetryPersistenceWorker
 from .ws_broadcaster import websocket_telemetry_handler, WebSocketBroadcaster
 from .ws_event_broadcaster import EventBroadcaster
+from .control_service import ControlService, set_control_service, get_control_service
+from .robot_adapter import create_adapter
+
 
 
 APP_START_MONO = time.monotonic()
@@ -57,6 +61,7 @@ _ws_broadcaster: WebSocketBroadcaster | None = None
 _persistence_worker: TelemetryPersistenceWorker | None = None
 _event_broadcaster: EventBroadcaster | None = None
 _ai_worker: Any | None = None
+_control_service: ControlService | None = None
 
 
 def _get_state_machine() -> StateMachine | None:
@@ -87,6 +92,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Startup
     setup_logging()
     logger.info("BotDog backend starting up (lifespan)...")
+    logger.info("Config loaded from {}", settings.Config.env_file)
+    logger.info("THERMAL_THRESHOLD={}°C", settings.THERMAL_THRESHOLD)
     await init_db()
     logger.info("Database initialized.")
 
@@ -184,6 +191,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         alert_service_instance = AlertService(event_broadcaster=_event_broadcaster)
         set_alert_service(alert_service_instance)
         logger.info(f"告警服务已初始化，broadcaster ID: {id(_event_broadcaster)}")
+
+        # 9. 初始化控制服务（阶段 6）
+        global _control_service
+        _adapter = create_adapter(settings.CONTROL_ADAPTER_TYPE)
+        _control_service = ControlService(
+            adapter=_adapter,
+            state_machine=_state_machine,
+            watchdog_timeout_ms=settings.CONTROL_WATCHDOG_TIMEOUT_MS,
+            cmd_rate_limit_ms=settings.CONTROL_CMD_RATE_LIMIT_MS,
+        )
+        set_control_service(_control_service)
+        tasks.append(asyncio.create_task(_control_service.run_watchdog(stop_event)))
+        logger.info(
+            f"控制服务已启动，适配器: {settings.CONTROL_ADAPTER_TYPE}，"
+            f"Watchdog: {settings.CONTROL_WATCHDOG_TIMEOUT_MS}ms"
+        )
 
         logger.info("所有后台任务已启动，应用就绪")
 
@@ -294,6 +317,38 @@ def register_routes(app: FastAPI) -> None:
             mavlink_connected=mavlink_connected,
             uptime=round(uptime, 3),
         )
+
+    # ── 控制命令接口 ────────────────────────────────────────────────────────
+
+    from pydantic import BaseModel as _PydanticBase
+
+    class ControlCommandRequest(_PydanticBase):
+        """控制命令请求体。"""
+        cmd: str
+
+    @app.post("/api/v1/control/command", response_model=ControlAckDTO)
+    async def control_command(body: ControlCommandRequest) -> ControlAckDTO:
+        """
+        发送控制命令到机器狗。
+
+        支持的命令：forward / backward / left / right / sit / stand / stop
+
+        - 按下时前端每 100ms 发一次，松手时立即发 stop
+        - E_STOP 状态下所有命令被拒绝（返回 REJECTED_E_STOP）
+        - Watchdog 超时 500ms 后自动执行 stop
+        """
+        svc = get_control_service()
+        if svc is None:
+            raise HTTPException(status_code=503, detail="控制服务未就绪")
+        return await svc.handle_command(body.cmd)
+
+    @app.post("/api/v1/control/stop", response_model=ControlAckDTO)
+    async def control_stop() -> ControlAckDTO:
+        """快捷停止接口（等同于发送 cmd='stop'），供前端紧急停止使用。"""
+        svc = get_control_service()
+        if svc is None:
+            raise HTTPException(status_code=503, detail="控制服务未就绪")
+        return await svc.handle_command("stop")
 
     @app.post("/api/v1/session/start", response_model=SessionStartResponse)
     async def session_start(

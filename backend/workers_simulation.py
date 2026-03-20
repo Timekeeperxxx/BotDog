@@ -80,21 +80,7 @@ async def simulation_worker(stop_event: asyncio.Event) -> None:
                 )
                 session.add(snapshot)
 
-                # 5% 概率写入一条模拟异常证据
-                if random.random() < 0.05:
-                    evidence = AnomalyEvidence(
-                        task_id=task.task_id,
-                        event_type="thermal_high",
-                        event_code="E_THERMAL_HIGH",
-                        severity="CRITICAL",
-                        message="模拟高温告警（Fake Data）",
-                        confidence=0.98,
-                        file_path="/data/snapshots/FAKE/fake_img.jpg",
-                        image_url="/api/v1/static/snapshots/FAKE/fake_img.jpg",
-                        gps_lat=sample.lat,
-                        gps_lon=sample.lon,
-                    )
-                    session.add(evidence)
+                # 模拟异常证据已禁用（避免产生虚假的高温告警）
 
                 await session.commit()
 

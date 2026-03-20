@@ -50,10 +50,13 @@ class InspectionTask(Base):
         lazy="selectin",
     )
     # 任务下的所有异常证据记录
+    # 注意：证据使用 SET NULL 外键策略，删除任务后证据保留（task_id 置空）
+    # 因此不使用 delete-orphan cascade，避免级联清除历史取证
     evidences: Mapped[list["AnomalyEvidence"]] = relationship(
         back_populates="task",
-        cascade="all, delete-orphan",
+        cascade="save-update, merge",
         lazy="selectin",
+        passive_deletes=True,
     )
     # 与任务相关的审计日志；删除任务时日志保留，仅 task_id 置空
     logs: Mapped[list["OperationLog"]] = relationship(
@@ -114,10 +117,12 @@ class AnomalyEvidence(Base):
     evidence_id: Mapped[int] = mapped_column(
         Integer, primary_key=True, autoincrement=True
     )
-    task_id: Mapped[int] = mapped_column(
+    # task_id 允许为 NULL：AI 检测可在无巡检任务时触发（独立告警场景）
+    # ondelete="SET NULL"：删除任务后证据仍保留，task_id 置空，避免历史取证丢失
+    task_id: Mapped[int | None] = mapped_column(
         Integer,
-        ForeignKey("inspection_tasks.task_id", ondelete="CASCADE"),
-        nullable=False,
+        ForeignKey("inspection_tasks.task_id", ondelete="SET NULL"),
+        nullable=True,
     )
 
     event_type: Mapped[str] = mapped_column(String, nullable=False)
@@ -127,7 +132,8 @@ class AnomalyEvidence(Base):
 
     confidence: Mapped[float | None] = mapped_column(Float)
 
-    file_path: Mapped[str] = mapped_column(Text, nullable=False)
+    # file_path 允许为 NULL：温度告警无截图文件
+    file_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     image_url: Mapped[str | None] = mapped_column(Text)
 
     gps_lat: Mapped[float | None] = mapped_column(Float)
@@ -135,11 +141,11 @@ class AnomalyEvidence(Base):
 
     created_at: Mapped[str] = mapped_column(String, nullable=False, default=utc_now_iso)
 
-    task: Mapped[InspectionTask] = relationship(back_populates="evidences")
+    task: Mapped[InspectionTask | None] = relationship(back_populates="evidences")
 
     __table_args__ = (
         CheckConstraint(
-            "severity IN ('INFO', 'WARN', 'ERROR', 'CRITICAL')",
+            "severity IN ('INFO', 'WARN', 'WARNING', 'ERROR', 'CRITICAL')",
             name="ck_anomaly_severity",
         ),
         CheckConstraint(

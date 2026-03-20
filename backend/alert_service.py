@@ -9,7 +9,6 @@
 """
 
 from typing import Optional, Dict, Any
-from datetime import datetime
 from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .temperature_monitor import TemperatureAlert
 from .logging_config import logger
 from .config import settings
+from .schemas import utc_now_iso
 
 
 @dataclass
@@ -170,7 +170,7 @@ class AlertService:
             image_url=evidence.image_url,
             gps_lat=evidence.gps_lat,
             gps_lon=evidence.gps_lon,
-            created_at=datetime.now().isoformat(timespec="milliseconds"),
+            created_at=utc_now_iso(),  # UTC ISO8601 with Z, 前端按本地时区正确显示
         )
 
         session.add(db_evidence)

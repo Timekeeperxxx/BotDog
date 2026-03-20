@@ -202,7 +202,7 @@ class AIWorker:
             except asyncio.CancelledError:
                 break
             except Exception as exc:  # noqa: BLE001
-                logger.exception("AI Worker 异常: {}", exc)
+                logger.exception("AI Worker 异常: %s", exc)
 
             if stop_event.is_set():
                 break
@@ -213,7 +213,7 @@ class AIWorker:
             else:
                 retry_delay = min(retry_delay * 2, max_retry_delay)
 
-            logger.warning("AI Worker 重连等待 %.1fs", retry_delay)
+            logger.warning("AI Worker 重连等待 {:.1f}s", retry_delay)
             await asyncio.sleep(retry_delay)
 
         logger.info("AI Worker 已停止")
@@ -279,7 +279,7 @@ class AIWorker:
         ]
 
         logger.info(
-            "AI Worker 启动 FFmpeg: rtsp=%s fps=%s size=%sx%s",
+            "AI Worker 启动 FFmpeg: rtsp={} fps={} size={}x{}",
             settings.AI_RTSP_URL,
             settings.AI_FPS,
             self._frame_width,
@@ -300,7 +300,9 @@ class AIWorker:
             line = await process.stderr.readline()
             if not line:
                 break
-            logger.debug("[ffmpeg] %s", line.decode("utf-8", errors="ignore").strip())
+            decoded = line.decode("utf-8", errors="ignore").strip()
+            if decoded:
+                logger.debug("[ffmpeg] {}", decoded)
 
     async def _update_current_task_id(self) -> None:
         current_time = asyncio.get_event_loop().time()

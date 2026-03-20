@@ -74,6 +74,14 @@ class Settings(BaseSettings):
     # 抓拍存储目录（用于 /api/v1/static）
     SNAPSHOT_DIR: str = "data/snapshots"
 
+    # 阶段 6：网页控制服务配置
+    # 适配器类型：simulation（仅打印日志）| mavlink（真实硬件）
+    CONTROL_ADAPTER_TYPE: str = "simulation"
+    # Watchdog 超时（ms）：超过此时间未收到命令自动执行 stop
+    CONTROL_WATCHDOG_TIMEOUT_MS: int = 500
+    # 最小命令间隔（ms）：防止前端过快发命令（stop 命令跳过此限制）
+    CONTROL_CMD_RATE_LIMIT_MS: int = 50
+
     class Config:
         env_file = str(Path(__file__).resolve().parent / ".env")
         env_file_encoding = "utf-8"

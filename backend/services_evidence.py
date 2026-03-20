@@ -57,6 +57,9 @@ async def delete_evidence_by_ids(
 
     missing_files = 0
     for row in rows:
+        if not row.file_path:
+            # 温度告警等无截图文件的证据，跳过文件删除
+            continue
         file_path = Path(row.file_path)
         try:
             file_path.unlink(missing_ok=True)
