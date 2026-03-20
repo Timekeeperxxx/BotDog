@@ -22,6 +22,10 @@ export function useWhepVideo() {
   const retryTimerRef = useRef<number | null>(null);
   const statsTimerRef = useRef<number | null>(null);
   const [videoLatencyMs, setVideoLatencyMs] = useState<number | null>(null);
+  const [videoResolution, setVideoResolution] = useState<{ width: number | null; height: number | null }>({
+    width: null,
+    height: null,
+  });
   const connectSessionIdRef = useRef(0);
   const shouldRetryRef = useRef(true);
 
@@ -55,6 +59,7 @@ export function useWhepVideo() {
     }
 
     setVideoLatencyMs(null);
+    setVideoResolution({ width: null, height: null });
 
     if (videoRef.current) {
       videoRef.current.srcObject = null;
@@ -193,6 +198,30 @@ export function useWhepVideo() {
   }, [cleanup]);
 
   useEffect(() => {
+    const video = videoRef.current;
+    if (!video) {
+      return;
+    }
+
+    const updateResolution = () => {
+      const width = video.videoWidth || null;
+      const height = video.videoHeight || null;
+      if (width && height) {
+        setVideoResolution({ width, height });
+      }
+    };
+
+    updateResolution();
+    video.addEventListener('loadedmetadata', updateResolution);
+    video.addEventListener('resize', updateResolution);
+
+    return () => {
+      video.removeEventListener('loadedmetadata', updateResolution);
+      video.removeEventListener('resize', updateResolution);
+    };
+  }, [videoRef]);
+
+  useEffect(() => {
     return () => {
       void cleanup();
     };
@@ -202,6 +231,7 @@ export function useWhepVideo() {
     status: state,
     videoRef,
     videoLatencyMs,
+    videoResolution,
     connect,
     disconnect,
   };

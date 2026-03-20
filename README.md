@@ -54,37 +54,58 @@ npm --version
 ### 2. 安装依赖
 
 ```bash
-# 创建并激活 Python 虚拟环境（首次运行）
-python3 -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-# 或者在 Windows 上使用: .venv\Scripts\activate
+# 后端：创建并激活 Python 虚拟环境
+python -m venv .venv
 
-# 后端依赖
+# Windows
+.venv\Scripts\activate
+# Linux/Mac
+source .venv/bin/activate
+
 pip install -r requirements.txt
 
-# 前端依赖
+# 前端
 cd frontend
 npm install
 ```
 
-### 3. 启动服务
+### 3. 配置环境变量
 
 ```bash
-# 后端（终端 1）
-.venv/Scripts/python.exe run_backend.py
+# 后端配置（复制模板，按需修改）
+copy backend\.env.example backend\.env   # Windows
+cp backend/.env.example backend/.env       # Linux/Mac
+
+# 前端配置（复制模板，按需修改）
+copy frontend\.env.example frontend\.env  # Windows
+cp frontend/.env.example frontend/.env     # Linux/Mac
+```
+
+> **提示**：
+> - 默认配置即为**纯模拟模式**，无需任何硬件即可运行
+> - AI 功能默认关闭（`AI_ENABLED=false`），开启需额外下载模型文件（见下文）
+
+### 4. 初始化数据库
+
+```bash
+# 在项目根目录执行（激活虚拟环境后）
+python init_db.py
+```
+
+### 5. 启动服务
+
+```bash
+# 后端（终端 1，在项目根目录）
+python run_backend.py
 
 # 前端（终端 2）
 cd frontend
 npm run dev
 ```
 
-> **重要**：
-> - 后端必须使用 `--host 0.0.0.0` 监听所有网卡，否则外部设备无法连接
-> - 默认前端端口为 5174
+### 6. 访问界面
 
-### 4. 访问界面
-
-打开浏览器访问: `http://localhost:5174` 或 `http://YOUR_IP:5174`
+打开浏览器访问: `http://localhost:5174`
 
 ---
 
@@ -123,14 +144,16 @@ npm run dev
 
 ### WHEP 测试页
 
-- `web/index.html` 用于快速验证 WHEP 播放。
-- 可在输入框中修改 WHEP URL。
+- `web/index.html` 用于快速验证 WHEP 播放（需要 MediaMTX 运行中）
+- 可在输入框中修改 WHEP URL
 
 ---
 
 ## 控制方式
 
-控制链路已切换为 FT24 硬件直连，Web 控制面板已下线。
+支持两种控制方式：
+- **Web 控制面板**：通过界面上的虚拟摇杆或键盘控制，无需硬件
+- **FT24 遥控器**：通过 SBUS 协议硬件直连控制机器狗（需要硬件）
 
 ---
 
@@ -206,22 +229,23 @@ npm run dev
 
 ---
 
-## 验收测试
+## 测试
 
 ```bash
-# 运行所有验收测试（UC-01 到 UC-05）
-python acceptance_test.py
+# 运行单元测试
+pytest tests/
+
+# 带覆盖率报告
+pytest tests/ --cov=backend --cov-report=term-missing
 ```
 
 ### 测试覆盖
 
-- ✅ UC-01: 系统健康检查
-- ✅ UC-02: 遥测 WebSocket 连接
-- ✅ UC-03: 事件 WebSocket 连接
-- ✅ UC-04: 配置管理 API
-- ✅ UC-05: 告警系统功能
-
-**当前通过率**: 100% (5/5)
+- ✅ 系统健康检查
+- ✅ 遥测 WebSocket 连接
+- ✅ 事件 WebSocket 连接
+- ✅ 配置管理 API
+- ✅ 告警系统功能
 
 ---
 
@@ -258,14 +282,17 @@ python acceptance_test.py
 ### 后端
 
 ```bash
+# 推荐启动方式
+python run_backend.py
+
 # 开发模式（热重载）
 uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 
 # 生产模式
 uvicorn backend.main:app --host 0.0.0.0 --port 8000 --workers 4
 
-# 初始化配置数据库
-python init_config.py
+# 初始化数据库
+python init_db.py
 
 # 运行单元测试
 pytest tests/
@@ -274,7 +301,7 @@ pytest tests/
 ### 前端
 
 ```bash
-# 开发模式
+# 开发模式（端口 5174）
 cd frontend
 npm run dev
 
@@ -288,11 +315,21 @@ npm run preview
 ### 数据库
 
 ```bash
-# 初始化数据库表
-python init_config.py
+# 初始化数据库表（首次运行必须执行）
+python init_db.py
 
 # 清理数据库（谨慎使用）
-rm -f data/botdog.db
+del data\botdog.db    # Windows
+rm -f data/botdog.db  # Linux/Mac
+```
+
+### AI 模型（可选）
+
+```bash
+# 如需开启 AI 告警功能，下载 YOLOv8n 模型（~6MB）
+# 将文件放在项目根目录
+# 下载地址：https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8n.pt
+# 然后在 backend/.env 中设置：AI_ENABLED=true
 ```
 
 ---
@@ -327,18 +364,36 @@ BotDog/
 
 ## 🚢 部署
 
-### 前置条件
+### 纯模拟模式（无需任何硬件）
+
+适合快速体验和前端开发：
+
+```bash
+# backend/.env 中确保以下配置
+MAVLINK_SOURCE=simulation
+SIMULATION_WORKER_ENABLED=true
+AI_ENABLED=false
+```
+
+### 连接真实机器狗
 
 1. **机器狗端需要**:
    - MAVLink 设备（串口或 UDP 连接）
-   - 摄像头设备（/dev/video0）
-   - Python 3.10+ 环境
-   - GStreamer 库
+   - 摄像头设备（RTSP 输出）
+   - Python 3.12+ 环境
 
 2. **操作端需要**:
    - 现代浏览器（Chrome/Firefox/Edge）
-   - 网络连接到机器狗
+   - 与机器狗在同一网段
    - 游戏手柄（可选）
+
+3. **配置修改**:
+   ```bash
+   # backend/.env
+   MAVLINK_SOURCE=mavlink
+   MAVLINK_ENDPOINT=serial:COM3:57600  # Windows 串口示例
+   # MAVLINK_ENDPOINT=serial:/dev/ttyUSB0:57600  # Linux 串口示例
+   ```
 
 详细部署步骤请参考: [docs/31_startup_guide.md](docs/31_startup_guide.md)
 
@@ -390,5 +445,5 @@ MIT License
 ---
 
 **状态**: ✅ 生产就绪
-**最后更新**: 2026-03-06
+**最后更新**: 2026-03-20
 **仓库**: https://github.com/Timekeeperxxx/BotDog

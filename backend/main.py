@@ -37,7 +37,7 @@ from .schemas import (
 )
 from .services_evidence import list_evidence, delete_evidence_by_ids
 from .services_logs import list_logs, write_log
-from .services_tasks import create_task, stop_task
+from .services_tasks import create_task, stop_task, cleanup_stale_tasks
 from .alert_service import AlertService
 from .mavlink_gateway import MAVLinkGateway
 
@@ -96,6 +96,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("THERMAL_THRESHOLD={}°C", settings.THERMAL_THRESHOLD)
     await init_db()
     logger.info("Database initialized.")
+
+    # 清理上次进程遗留的僵尸任务（防止 AI Worker 误认为任务仍在运行）
+    async with get_session_factory()() as _startup_session:
+        _stale_count = await cleanup_stale_tasks(_startup_session)
+        if _stale_count:
+            logger.warning("启动清理: 发现并关闭了 {} 个遗留的 running 任务", _stale_count)
+        else:
+            logger.info("启动清理: 无遗留任务")
 
     snapshot_dir = Path(settings.SNAPSHOT_DIR)
     snapshot_dir.mkdir(parents=True, exist_ok=True)

@@ -58,3 +58,28 @@ async def stop_task(session: AsyncSession, task_id: int) -> Optional[InspectionT
     await session.refresh(task)
     return task
 
+
+async def cleanup_stale_tasks(session: AsyncSession) -> int:
+    """
+    将所有遗留的 running 状态任务标记为 interrupted。
+
+    在后端每次启动时调用，防止上次进程崩溃/重启遗留的僵尸任务
+    被 AI Worker 误认为仍在执行中。
+
+    Returns:
+        清理的任务数量
+    """
+    stmt = select(InspectionTask).where(InspectionTask.status == "running")
+    result = await session.execute(stmt)
+    stale_tasks = result.scalars().all()
+
+    now = _utc_now_iso()
+    for task in stale_tasks:
+        task.status = "stopped"
+        task.ended_at = now
+        task.updated_at = now
+
+    if stale_tasks:
+        await session.commit()
+
+    return len(stale_tasks)

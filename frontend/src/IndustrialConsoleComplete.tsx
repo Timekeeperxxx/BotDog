@@ -118,17 +118,23 @@ function DetectionAlert({ data }: {
 }) {
   const isStranger = data.severity === 'CRITICAL';
   const imageSrc = getImageUrl(data.image_url);
+  const severityLabel: Record<string, string> = {
+    CRITICAL: '紧急告警',
+    WARNING: '警告',
+    INFO: '提示',
+  };
+  const displaySeverity = severityLabel[data.severity] ?? data.severity;
   return (
     <div className="group bg-zinc-900 border-2 border-white/10 p-3 rounded-xl shadow-2xl hover:border-white transition-all cursor-pointer">
       <div className="flex items-center justify-between mb-3 border-b border-white/5 pb-2">
         <div className="flex items-center space-x-2">
           <div className={`w-2 h-2 rounded-full ${isStranger ? 'bg-red-500 animate-pulse' : 'bg-orange-500'}`} />
-          <span className="text-[10px] font-black uppercase tracking-widest text-white">
-            {data.severity}
+          <span className="text-[10px] font-black tracking-widest text-white">
+            {displaySeverity}
           </span>
         </div>
         <span className="text-[10px] font-mono font-black text-slate-400">
-          {new Date(data.timestamp).toLocaleTimeString('zh-CN', { hour12: false }).split(':').slice(1).join(':')}
+          {new Date(data.timestamp).toLocaleTimeString('zh-CN', { hour12: false })}
         </span>
       </div>
       <div className="flex space-x-4 items-center">

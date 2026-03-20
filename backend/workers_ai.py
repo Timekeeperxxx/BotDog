@@ -251,7 +251,7 @@ class AIWorker:
             logger.warning("AI Worker: FFmpeg 输出中断，准备重启")
         finally:
             stderr_task.cancel()
-            with contextlib.suppress(Exception):
+            with contextlib.suppress(asyncio.CancelledError):  # CancelledError 不是 Exception，须单独捕获
                 await stderr_task
 
             process.terminate()
@@ -261,20 +261,15 @@ class AIWorker:
     async def _start_ffmpeg(self) -> asyncio.subprocess.Process:
         command = [
             "ffmpeg",
-            "-hwaccel",
-            "auto",
-            "-i",
-            settings.AI_RTSP_URL,
-            "-vf",
-            f"scale={self._frame_width}:{self._frame_height}",
-            "-f",
-            "image2pipe",
-            "-vcodec",
-            "rawvideo",
-            "-pix_fmt",
-            "bgr24",
-            "-r",
-            str(settings.AI_FPS),
+            "-rtsp_transport", "tcp",       # 用 TCP 代替 UDP，避免丢包导致 H.264 解码花屏
+            "-hwaccel", "auto",
+            "-i", settings.AI_RTSP_URL,
+            "-fflags", "+discardcorrupt",   # 解码失败的帧直接丢弃，不输出马赛克帧
+            "-vf", f"scale={self._frame_width}:{self._frame_height}",
+            "-f", "image2pipe",
+            "-vcodec", "rawvideo",
+            "-pix_fmt", "bgr24",
+            "-r", str(settings.AI_FPS),
             "-",
         ]
 
@@ -364,6 +359,16 @@ class AIWorker:
         image_path, image_url = await self._save_snapshot(frame)
         gps = self._get_latest_gps()
 
+        # YOLO 类别 → 中文显示名映射
+        _label_zh: dict[str, str] = {
+            "person": "陌生人",
+            "car": "车辆",
+            "dog": "动物",
+            "cat": "动物",
+            "fire": "火焰",
+        }
+        label_zh = _label_zh.get(detection.label, detection.label)
+
         alert_service = get_alert_service()
 
         async with self._session_factory() as session:
@@ -371,7 +376,7 @@ class AIWorker:
                 event_type="AI_DETECTION",
                 event_code=f"E_AI_{detection.label.upper()}",
                 severity="CRITICAL",
-                message=f"检测到目标: {detection.label}",
+                message=f"检测到目标: {label_zh}",
                 confidence=detection.confidence,
                 file_path=str(image_path),
                 image_url=image_url,
