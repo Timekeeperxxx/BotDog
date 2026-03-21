@@ -84,7 +84,7 @@ class AlertService:
             event_code="E_THERMAL_HIGH",
             severity="CRITICAL" if alert.temperature > 80 else "WARNING",
             message=f"检测到目标温度过高 ({alert.temperature:.1f}°C)",
-            confidence=min(100.0, (alert.temperature / alert.threshold) * 100),
+            confidence=min(1.0, alert.temperature / alert.threshold),
             file_path=None,  # TODO: 实现截图功能
             image_url=None,
             gps_lat=position.get("lat") if position else None,

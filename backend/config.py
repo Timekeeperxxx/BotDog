@@ -82,6 +82,19 @@ class Settings(BaseSettings):
     # 最小命令间隔（ms）：防止前端过快发命令（stop 命令跳过此限制）
     CONTROL_CMD_RATE_LIMIT_MS: int = 50
 
+    # 阶段 7：自动跟踪配置
+    # 总开关：默认关闭（安全优先），须显式启用；运行时可通过 API 控制
+    # 区域配置存储在数据库 focus_zones 表，不使用 .env 配置
+    AUTO_TRACK_ENABLED: bool = False
+    AUTO_TRACK_COMMAND_INTERVAL_MS: int = 200     # 自动命令发送最小间隔（ms）
+    AUTO_TRACK_TARGET_HOLD_SECONDS: float = 3.0   # 目标最短保持时间（s）
+    AUTO_TRACK_OUT_OF_ZONE_FRAMES: int = 10       # 连续出区帧数触发停止阈值
+    AUTO_TRACK_LOST_TIMEOUT_FRAMES: int = 30      # 目标丢失超时帧数
+    AUTO_TRACK_YAW_DEADBAND_PX: int = 80          # 水平偏航死区（像素）
+    AUTO_TRACK_FORWARD_AREA_RATIO: float = 0.15   # 前进触发的面积比阈值
+    AUTO_TRACK_STOP_SNAPSHOT_ENABLED: bool = True  # 跟踪停止时是否补拍终止证据图
+
+
     class Config:
         env_file = str(Path(__file__).resolve().parent / ".env")
         env_file_encoding = "utf-8"

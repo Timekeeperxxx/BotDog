@@ -172,7 +172,7 @@ class ControlService:
             return False
         try:
             from .state_machine import SystemState
-            return self._state_machine.current_state == SystemState.E_STOP_TRIGGERED
+            return self._state_machine.state == SystemState.E_STOP_TRIGGERED
         except Exception:  # noqa: BLE001
             return False
 

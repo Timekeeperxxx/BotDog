@@ -1,11 +1,14 @@
 """
 旁路 AI 识别与抓拍 Worker。
 
-职责：
+职责（阶段 1 改造后）：
 - 通过 FFmpeg 子进程读取 RTSP 原始帧（BGR24）
-- 巡逻态跳帧推理，疑似目标全速推理
-- 判定消抖 + 冷却后触发抓拍
-- 调用 AlertService 写入证据并广播告警
+- 调用检测器 detect_many() 获取所有 person 检测结果
+- 将检测结果交给 AutoTrackService.process_frame() 处理
+- 广播基础 AI 状态（AI_STATUS）
+
+注意：目标稳定命中、锁定、出区判断、跟踪控制命令均由 AutoTrackService 负责。
+若 auto_track_service 未启用，回退到原有「检测即告警」兼容路径。
 """
 
 from __future__ import annotations
@@ -28,6 +31,7 @@ from .alert_service import get_alert_service
 from .state_machine import SystemState
 from .ws_event_broadcaster import get_event_broadcaster
 from .schemas import utc_now_iso
+from .tracking_types import DetectionResult as TrackDetectionResult
 
 
 class AIWorkerError(RuntimeError):
@@ -36,8 +40,10 @@ class AIWorkerError(RuntimeError):
 
 @dataclass
 class DetectionResult:
+    """AIWorker 内部检测结果（兼容老路径用）。"""
     label: str
     confidence: float
+    bbox: Optional[tuple[int, int, int, int]] = None  # 新增 bbox 字段
 
 
 class _BaseDetector:
@@ -111,16 +117,21 @@ class _YoloDetector(_BaseDetector):
         logger.info("YOLO 模型已就绪，类别数: %d, 目标: %s", len(self._class_names), target_classes)
 
     def detect(self, frame_bytes: bytes) -> Optional[DetectionResult]:
+        """返回置信度最高的单个目标（兼容老路径）。"""
+        results = self.detect_many(frame_bytes)
+        return results[0] if results else None
+
+    def detect_many(self, frame_bytes: bytes) -> list[DetectionResult]:
+        """返回所有目标类别的检测结果列表，供 AutoTrackService 处理。"""
         frame = self._np.frombuffer(frame_bytes, dtype=self._np.uint8)
         frame = frame.reshape((self._frame_height, self._frame_width, 3))
 
         results = self._model.predict(frame, conf=self._confidence, verbose=False)
 
         if not results or len(results[0].boxes) == 0:
-            return None
+            return []
 
-        # 找到目标类别中置信度最高的检测
-        best: Optional[DetectionResult] = None
+        detections = []
         for box in results[0].boxes:
             cls_id = int(box.cls[0])
             cls_name = self._class_names.get(cls_id, str(cls_id))
@@ -129,10 +140,12 @@ class _YoloDetector(_BaseDetector):
             if cls_name not in self._target_classes:
                 continue
 
-            if best is None or conf > best.confidence:
-                best = DetectionResult(label=cls_name, confidence=conf)
+            # 提取 bbox (x1,y1,x2,y2) 格式
+            xyxy = box.xyxy[0].tolist()
+            bbox = (int(xyxy[0]), int(xyxy[1]), int(xyxy[2]), int(xyxy[3]))
+            detections.append(DetectionResult(label=cls_name, confidence=conf, bbox=bbox))
 
-        return best
+        return detections
 
 
 class AIWorker:
@@ -162,6 +175,7 @@ class AIWorker:
         self._current_task_id: Optional[int] = None
         self._last_task_check_time: float = 0.0
 
+        # 兼容路径状态（仅当 auto_track_service 未启用时使用）
         self._hits = 0
         self._misses = 0
         self._in_alert = False
@@ -241,10 +255,17 @@ class AIWorker:
                 if skip > 1 and (frame_index % skip) != 0:
                     continue
 
-                detection = self._detector.detect(frame)
-                await self._process_detection(detection, frame)
+                # 调用 detect_many 返回所有候选结果
+                if hasattr(self._detector, 'detect_many'):
+                    detections = self._detector.detect_many(frame)
+                else:
+                    # _SimulatedDetector/_NullDetector 回退到 detect() 兼容
+                    single = self._detector.detect(frame)
+                    detections = [single] if single else []
+
+                await self._process_detection(detections, frame)
                 self._frames_processed += 1
-                if detection:
+                if detections:
                     self._detections_count += 1
                 await self._maybe_broadcast_status()
         except asyncio.IncompleteReadError:
@@ -323,9 +344,41 @@ class AIWorker:
 
     async def _process_detection(
         self,
-        detection: Optional[DetectionResult],
+        detections: list[DetectionResult],
         frame: bytes,
     ) -> None:
+        """
+        处理检测结果。
+
+        优先路径：将结果交给 AutoTrackService 处理（包含状态机、控制命令、抓拍）。
+        兼容路径：若 AutoTrackService 未启用，回退到原有「检测即告警」逻辑。
+        """
+        from .auto_track_service import get_auto_track_service
+        auto_track = get_auto_track_service()
+
+        if auto_track is not None and auto_track._enabled:
+            # ── 优先路径：交给 AutoTrackService ─────────────────────────
+            # 将 DetectionResult 转换为 tracking_types.DetectionResult
+            track_detections = [
+                TrackDetectionResult(
+                    bbox=d.bbox or (0, 0, 1, 1),
+                    confidence=d.confidence,
+                    class_name=d.label,
+                )
+                for d in detections
+                if d.bbox is not None
+            ]
+            await auto_track.process_frame(
+                detections=track_detections,
+                frame=frame,
+                frame_index=self._frames_processed,
+                current_task_id=self._current_task_id,
+            )
+            return
+
+        # ── 兼容路径：原有「检测即告警」逻辑 ──────────────────────────────
+        detection = detections[0] if detections else None
+
         if detection:
             self._hits += 1
             self._misses = 0

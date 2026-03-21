@@ -61,13 +61,13 @@ class LogsPage(BaseModel):
 
 class EvidenceItem(BaseModel):
     evidence_id: int
-    task_id: int
+    task_id: Optional[int] = None    # 可为 NULL：AI/温度告警可在无巡检任务时触发
     event_type: str
     event_code: Optional[str] = None
     severity: str
     message: Optional[str] = None
     confidence: Optional[float] = None
-    file_path: str
+    file_path: Optional[str] = None  # 可为 NULL：温度告警无截图文件
     image_url: Optional[str] = None
     gps_lat: Optional[float] = None
     gps_lon: Optional[float] = None

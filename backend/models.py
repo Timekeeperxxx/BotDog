@@ -207,3 +207,79 @@ class ConfigEntry(Base):
         ),
     )
 
+
+class FocusZone(Base):
+    """
+    重点监控区域。
+
+    坐标语义：图像坐标系（像素），原点为视频帧左上角。
+    polygon_json 示例：[[100,200],[300,200],[300,400],[100,400]]
+
+    注意：此区域代表"当前视频画面坐标系中的关注区域"，
+    不代表真实世界固定方位或地图坐标。
+    """
+
+    __tablename__ = "focus_zones"
+
+    zone_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    zone_name: Mapped[str] = mapped_column(String, nullable=False, default="default")
+    enabled: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    polygon_json: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        comment="图像像素坐标多边形顶点 JSON，与 AI_FRAME_WIDTH x AI_FRAME_HEIGHT 对齐",
+    )
+    created_at: Mapped[str] = mapped_column(String, nullable=False, default=utc_now_iso)
+    updated_at: Mapped[str] = mapped_column(String, nullable=False, default=utc_now_iso)
+
+    __table_args__ = (
+        CheckConstraint(
+            "enabled IN (0, 1)",
+            name="ck_focus_zones_enabled",
+        ),
+    )
+
+
+class SessionKnownTarget(Base):
+    """
+    会话级已知人员标记。
+
+    语义：
+    - 每条记录代表本次巡检任务中，操作员标记为"已知人员"的目标
+    - track_id 为 AIWorker 帧间 IOU 匹配分配的临时 ID，仅会话级有效
+    - 任务结束或系统重启后，这些记录不再被查询（不构成跨任务身份白名单）
+    - marked_by 记录谁发起了标记（默认为 operator）
+
+    注意：此表不提供人脸识别或 ReID 能力，阶段 3 仅作人工白名单用途。
+    """
+
+    __tablename__ = "session_known_targets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    task_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("inspection_tasks.task_id", ondelete="SET NULL"),
+        nullable=True,
+        comment="关联的巡检任务 ID",
+    )
+    track_id: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        comment="AIWorker 分配的帧间临时跟踪 ID（会话级有效）",
+    )
+    marked_by: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+        default="operator",
+        comment="标记发起方（operator/system）",
+    )
+    reason: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
+        comment="标记原因（可选）",
+    )
+    created_at: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+        default=utc_now_iso,
+    )

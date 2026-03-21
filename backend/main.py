@@ -216,6 +216,58 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             f"Watchdog: {settings.CONTROL_WATCHDOG_TIMEOUT_MS}ms"
         )
 
+        # 10. 初始化区域判断服务，从数据库加载重点区
+        from .zone_service import ZoneService, set_zone_service
+        _zone_service = ZoneService()
+        async with get_session_factory()() as _zone_session:
+            await _zone_service.load_from_db(_zone_session)
+        set_zone_service(_zone_service)
+        logger.info(f"重点区服务已初始化，共加载 {_zone_service.zone_count} 个区域")
+
+        # 11. 初始化自动跟踪服务（始终装配，运行时启停由内部状态控制）
+        from .target_manager import TargetManager
+        from .control_arbiter import ControlArbiter, set_control_arbiter
+        from .stranger_policy import StrangerPolicy, set_stranger_policy
+        from .auto_track_service import AutoTrackService, set_auto_track_service
+
+        _target_manager = TargetManager(
+            frame_width=settings.AI_FRAME_WIDTH,
+            frame_height=settings.AI_FRAME_HEIGHT,
+        )
+        _arbiter = ControlArbiter()
+        set_control_arbiter(_arbiter)
+
+        _stranger_policy = StrangerPolicy()
+        set_stranger_policy(_stranger_policy)
+
+        _auto_track_service = AutoTrackService(
+            zone_service=_zone_service,
+            control_service=_control_service,
+            event_broadcaster=_event_broadcaster,
+            state_machine=_state_machine,
+            session_factory=get_session_factory(),
+            snapshot_dir=snapshot_dir,
+            frame_width=settings.AI_FRAME_WIDTH,
+            frame_height=settings.AI_FRAME_HEIGHT,
+            stable_hits=settings.AI_STABLE_HITS,
+            reset_misses=settings.AI_RESET_MISSES,
+            out_of_zone_frames=settings.AUTO_TRACK_OUT_OF_ZONE_FRAMES,
+            lost_timeout_frames=settings.AUTO_TRACK_LOST_TIMEOUT_FRAMES,
+            command_interval_ms=settings.AUTO_TRACK_COMMAND_INTERVAL_MS,
+            yaw_deadband_px=settings.AUTO_TRACK_YAW_DEADBAND_PX,
+            forward_area_ratio=settings.AUTO_TRACK_FORWARD_AREA_RATIO,
+            stop_snapshot_enabled=settings.AUTO_TRACK_STOP_SNAPSHOT_ENABLED,
+            default_enabled=settings.AUTO_TRACK_ENABLED,
+            target_manager=_target_manager,
+            control_arbiter=_arbiter,
+        )
+        set_auto_track_service(_auto_track_service)
+        logger.info(
+            f"自动跟踪服务已初始化，默认启用={settings.AUTO_TRACK_ENABLED}，"
+            f"多目标模式已开启"
+        )
+
+
         logger.info("所有后台任务已启动，应用就绪")
 
         yield
@@ -764,6 +816,280 @@ def register_routes(app: FastAPI) -> None:
             "history": history,
             "total": len(history),
         }
+
+    # ── 重点区 CRUD API ────────────────────────────────────────────────────────
+
+    from pydantic import BaseModel as _PydanticBaseModel2
+    from datetime import datetime
+
+    class FocusZoneRequest(_PydanticBaseModel2):
+        zone_name: str = "default"
+        enabled: bool = True
+        polygon_json: str  # [[x,y],...] JSON 串
+
+    class FocusZoneResponse(_PydanticBaseModel2):
+        zone_id: int
+        zone_name: str
+        enabled: bool
+        polygon_json: str
+        created_at: str
+        updated_at: str
+
+    @app.get("/api/v1/focus-zones", response_model=list[FocusZoneResponse])
+    async def list_focus_zones(db=Depends(get_db)) -> list[FocusZoneResponse]:
+        """查询所有重点区配置。"""
+        from sqlalchemy import select
+        from .models import FocusZone
+        result = await db.execute(select(FocusZone))
+        zones = result.scalars().all()
+        return [
+            FocusZoneResponse(
+                zone_id=z.zone_id,
+                zone_name=z.zone_name,
+                enabled=bool(z.enabled),
+                polygon_json=z.polygon_json,
+                created_at=z.created_at,
+                updated_at=z.updated_at,
+            )
+            for z in zones
+        ]
+
+    @app.post("/api/v1/focus-zones", response_model=FocusZoneResponse, status_code=201)
+    async def create_focus_zone(
+        body: FocusZoneRequest,
+        db=Depends(get_db),
+    ) -> FocusZoneResponse:
+        """新增重点区。polygon_json 坐标为图像像素坐标。"""
+        import json
+        from .models import FocusZone
+        # 验证 JSON 格式
+        try:
+            pts = json.loads(body.polygon_json)
+            if len(pts) < 3:
+                raise ValueError("polygon 至少需要 3 个顶点")
+        except (json.JSONDecodeError, ValueError) as e:
+            raise HTTPException(status_code=422, detail=f"polygon_json 格式错误: {e}")
+
+        ts = utc_now_iso()
+        zone = FocusZone(
+            zone_name=body.zone_name,
+            enabled=1 if body.enabled else 0,
+            polygon_json=body.polygon_json,
+            created_at=ts,
+            updated_at=ts,
+        )
+        db.add(zone)
+        await db.commit()
+        await db.refresh(zone)
+
+        # 重新加载区域到内存
+        from .zone_service import get_zone_service
+        zs = get_zone_service()
+        if zs:
+            await zs.load_from_db(db)
+
+        return FocusZoneResponse(
+            zone_id=zone.zone_id,
+            zone_name=zone.zone_name,
+            enabled=bool(zone.enabled),
+            polygon_json=zone.polygon_json,
+            created_at=zone.created_at,
+            updated_at=zone.updated_at,
+        )
+
+    @app.put("/api/v1/focus-zones/{zone_id}", response_model=FocusZoneResponse)
+    async def update_focus_zone(
+        zone_id: int,
+        body: FocusZoneRequest,
+        db=Depends(get_db),
+    ) -> FocusZoneResponse:
+        """更新重点区配置。"""
+        import json
+        from .models import FocusZone
+        from sqlalchemy import select
+        result = await db.execute(select(FocusZone).where(FocusZone.zone_id == zone_id))
+        zone = result.scalar_one_or_none()
+        if zone is None:
+            raise HTTPException(status_code=404, detail=f"zone_id={zone_id} 不存在")
+
+        try:
+            pts = json.loads(body.polygon_json)
+            if len(pts) < 3:
+                raise ValueError("polygon 至少需要 3 个顶点")
+        except (json.JSONDecodeError, ValueError) as e:
+            raise HTTPException(status_code=422, detail=f"polygon_json 格式错误: {e}")
+
+        zone.zone_name = body.zone_name
+        zone.enabled = 1 if body.enabled else 0
+        zone.polygon_json = body.polygon_json
+        zone.updated_at = utc_now_iso()
+        await db.commit()
+        await db.refresh(zone)
+
+        # 重新加载区域到内存
+        from .zone_service import get_zone_service
+        zs = get_zone_service()
+        if zs:
+            await zs.load_from_db(db)
+
+        return FocusZoneResponse(
+            zone_id=zone.zone_id,
+            zone_name=zone.zone_name,
+            enabled=bool(zone.enabled),
+            polygon_json=zone.polygon_json,
+            created_at=zone.created_at,
+            updated_at=zone.updated_at,
+        )
+
+    @app.delete("/api/v1/focus-zones/{zone_id}")
+    async def delete_focus_zone(
+        zone_id: int,
+        db=Depends(get_db),
+    ) -> dict:
+        """删除重点区。"""
+        from .models import FocusZone
+        from sqlalchemy import select
+        result = await db.execute(select(FocusZone).where(FocusZone.zone_id == zone_id))
+        zone = result.scalar_one_or_none()
+        if zone is None:
+            raise HTTPException(status_code=404, detail=f"zone_id={zone_id} 不存在")
+        await db.delete(zone)
+        await db.commit()
+
+        # 重新加载区域到内存
+        from .zone_service import get_zone_service
+        zs = get_zone_service()
+        if zs:
+            await zs.load_from_db(db)
+
+        return {"success": True, "deleted_zone_id": zone_id}
+
+    # ── 自动跟踪 API ────────────────────────────────────────────────────────────
+
+    @app.get("/api/v1/auto-track/debug")
+    async def auto_track_debug() -> dict:
+        """调试端点：返回当前自动跟踪状态快照。"""
+        from .auto_track_service import get_auto_track_service
+        svc = get_auto_track_service()
+        if svc is None:
+            raise HTTPException(status_code=503, detail="自动跟踪服务未初始化")
+        return svc.get_status()
+
+    @app.post("/api/v1/auto-track/enable")
+    async def auto_track_enable() -> dict:
+        """运行时启用自动跟踪。"""
+        from .auto_track_service import get_auto_track_service
+        svc = get_auto_track_service()
+        if svc is None:
+            raise HTTPException(status_code=503, detail="自动跟踪服务未初始化")
+        svc.enable()
+        return {"success": True, "state": svc.get_status()["state"]}
+
+    @app.post("/api/v1/auto-track/disable")
+    async def auto_track_disable() -> dict:
+        """运行时禁用自动跟踪，立即停止并发出 stop 命令。"""
+        from .auto_track_service import get_auto_track_service
+        svc = get_auto_track_service()
+        if svc is None:
+            raise HTTPException(status_code=503, detail="自动跟踪服务未初始化")
+        svc.disable()
+        return {"success": True, "state": svc.get_status()["state"]}
+
+    @app.post("/api/v1/auto-track/pause")
+    async def auto_track_pause() -> dict:
+        """暂停自动跟踪（保留目标状态，停发控制命令）。"""
+        from .auto_track_service import get_auto_track_service
+        svc = get_auto_track_service()
+        if svc is None:
+            raise HTTPException(status_code=503, detail="自动跟踪服务未初始化")
+        svc.pause()
+        return {"success": True, "state": svc.get_status()["state"]}
+
+    @app.post("/api/v1/auto-track/resume")
+    async def auto_track_resume() -> dict:
+        """恢复自动跟踪。"""
+        from .auto_track_service import get_auto_track_service
+        svc = get_auto_track_service()
+        if svc is None:
+            raise HTTPException(status_code=503, detail="自动跟踪服务未初始化")
+        svc.resume()
+        return {"success": True, "state": svc.get_status()["state"]}
+
+    @app.post("/api/v1/auto-track/manual-override")
+    async def auto_track_manual_override() -> dict:
+        """人工接管控制权（自动命令将被拦截）。"""
+        from .control_arbiter import get_control_arbiter
+        from .tracking_types import ControlOwner
+        arbiter = get_control_arbiter()
+        if arbiter is None:
+            raise HTTPException(status_code=503, detail="仲裁器未初始化")
+        arbiter.request_control(ControlOwner.WEB_MANUAL)
+        return {"success": True, "arbiter": arbiter.get_status()}
+
+    @app.post("/api/v1/auto-track/release-override")
+    async def auto_track_release_override() -> dict:
+        """释放人工覆盖，允许自动跟踪恢复发命令。"""
+        from .control_arbiter import get_control_arbiter
+        arbiter = get_control_arbiter()
+        if arbiter is None:
+            raise HTTPException(status_code=503, detail="仲裁器未初始化")
+        arbiter.release_manual_override()
+        return {"success": True, "arbiter": arbiter.get_status()}
+
+    @app.get("/api/v1/auto-track/arbiter")
+    async def auto_track_arbiter_status() -> dict:
+        """查询当前控制权仲裁状态。"""
+        from .control_arbiter import get_control_arbiter
+        arbiter = get_control_arbiter()
+        if arbiter is None:
+            raise HTTPException(status_code=503, detail="仲裁器未初始化")
+        return arbiter.get_status()
+
+    @app.post("/api/v1/auto-track/mark-known/{track_id}")
+    async def auto_track_mark_known(track_id: int) -> dict:
+        """将指定 track_id 标记为已知人员（不再跟踪）。"""
+        from .stranger_policy import get_stranger_policy
+        from .auto_track_service import get_auto_track_service
+        policy = get_stranger_policy()
+        if policy is None:
+            raise HTTPException(status_code=503, detail="陌生人策略未初始化")
+        policy.mark_known(track_id, reason="operator")
+        svc = get_auto_track_service()
+        if svc and svc._target_manager:
+            svc._target_manager.mark_known(track_id)
+        return {
+            "success": True,
+            "track_id": track_id,
+            "known_count": policy.known_count,
+        }
+
+    @app.post("/api/v1/auto-track/unmark-known/{track_id}")
+    async def auto_track_unmark_known(track_id: int) -> dict:
+        """取消 track_id 的已知标记（误操作恢复）。"""
+        from .stranger_policy import get_stranger_policy
+        policy = get_stranger_policy()
+        if policy is None:
+            raise HTTPException(status_code=503, detail="陌生人策略未初始化")
+        policy.unmark_known(track_id)
+        return {
+            "success": True,
+            "track_id": track_id,
+            "known_count": policy.known_count,
+        }
+
+    @app.get("/api/v1/auto-track/known-list")
+    async def auto_track_known_list() -> dict:
+        """查询当前会话已知人员列表。"""
+        from .stranger_policy import get_stranger_policy
+        policy = get_stranger_policy()
+        if policy is None:
+            raise HTTPException(status_code=503, detail="陌生人策略未初始化")
+        return {
+            "known_ids": policy.get_known_ids(),
+            "total": policy.known_count,
+        }
+
+
 
 
 app = create_app()

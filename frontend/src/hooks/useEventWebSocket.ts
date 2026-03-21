@@ -4,13 +4,14 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getWsUrl } from '../config/api';
-import type { AlertEvent, AIStatus, EventMessage, EventWebSocketStatus } from '../types/event';
+import type { AlertEvent, AIStatus, EventWebSocketStatus, AutoTrackStatus } from '../types/event';
 
 export interface EventHookState {
   status: EventWebSocketStatus;
   alerts: AlertEvent[];
   latestAlert: AlertEvent | null;
   aiStatus: AIStatus | null;
+  autoTrackStatus: AutoTrackStatus | null;
   connect: () => void;
   disconnect: () => void;
 }
@@ -23,6 +24,7 @@ export function useEventWebSocket(): EventHookState {
   const [alerts, setAlerts] = useState<AlertEvent[]>([]);
   const [latestAlert, setLatestAlert] = useState<AlertEvent | null>(null);
   const [aiStatus, setAiStatus] = useState<AIStatus | null>(null);
+  const [autoTrackStatus, setAutoTrackStatus] = useState<AutoTrackStatus | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
@@ -65,20 +67,33 @@ export function useEventWebSocket(): EventHookState {
           return;
         }
         try {
-          const message = JSON.parse(event.data) as EventMessage;
+          const message = JSON.parse(event.data) as { msg_type: string; timestamp: string; payload: Record<string, any> };
 
           if (message.msg_type === 'AI_STATUS' && message.payload) {
             setAiStatus(message.payload as unknown as AIStatus);
             return;
           }
 
-          if (message.msg_type !== 'ALERT_RAISED' || !message.payload) {
+          if (message.msg_type === 'AUTO_TRACK_STATUS' && message.payload) {
+            setAutoTrackStatus(message.payload as unknown as AutoTrackStatus);
+            return;
+          }
+
+          if (
+            ![
+              'ALERT_RAISED',
+              'STRANGER_TARGET_LOCKED',
+              'AUTO_TRACK_STARTED',
+              'AUTO_TRACK_STOPPED',
+              'AUTO_TRACK_MANUAL_OVERRIDE',
+            ].includes(message.msg_type) || !message.payload
+          ) {
             return;
           }
 
           const alert: AlertEvent = {
-            ...message.payload,
-            timestamp: message.timestamp || message.payload.timestamp,
+            ...(message.payload as any),
+            timestamp: message.timestamp || (message.payload as any).timestamp,
           };
 
           setLatestAlert(alert);
@@ -143,6 +158,7 @@ export function useEventWebSocket(): EventHookState {
     alerts,
     latestAlert,
     aiStatus,
+    autoTrackStatus,
     connect,
     disconnect,
   };

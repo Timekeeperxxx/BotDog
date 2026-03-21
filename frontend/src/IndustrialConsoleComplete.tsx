@@ -10,6 +10,8 @@ import { useWhepVideo } from './hooks/useWhepVideo';
 import { ConfigPanel } from './components/ConfigPanel';
 import { ControlPad } from './components/ControlPad';
 import { useEventWebSocket } from './hooks/useEventWebSocket';
+import { useAutoTrack } from './hooks/useAutoTrack';
+import { AutoTrackPanel } from './components/AutoTrackPanel';
 import { getApiUrl } from './config/api';
 import {
   Activity,
@@ -173,7 +175,9 @@ export default function IndustrialConsoleComplete() {
     disconnect: disconnectWs,
   } = useBotDogWebSocket();
 
-  const { alerts, latestAlert, aiStatus } = useEventWebSocket();
+  const { alerts, latestAlert, aiStatus, autoTrackStatus } = useEventWebSocket();
+
+  const autoTrack = useAutoTrack(autoTrackStatus);
 
   const startupLoggedRef = useRef(false);
   const lastWsStatusRef = useRef<boolean | null>(null);
@@ -629,6 +633,11 @@ export default function IndustrialConsoleComplete() {
                     </div>
                     <div className="mt-1 text-white/50">延迟: {videoLatencyMs !== null ? `${videoLatencyMs}ms` : '--'}</div>
                   </div>
+                  {/* 自动跟踪控制面板 */}
+                  <div className="pointer-events-auto">
+                    <AutoTrackPanel {...autoTrack} />
+                  </div>
+
                   <div className="bg-black/40 border border-white/10 px-3 py-2 text-[10px] font-mono text-white/80">
                     <div className="uppercase tracking-widest text-white/40 mb-1">系统状态</div>
                     <div className="flex items-center gap-2">

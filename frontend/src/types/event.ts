@@ -24,7 +24,7 @@ export interface AlertEvent {
 export interface EventMessage {
   msg_type: string;
   timestamp: string;
-  payload: AlertEvent;
+  payload: Record<string, any>;
 }
 
 export interface EventWebSocketStatus {
@@ -39,3 +39,52 @@ export interface AIStatus {
   hits: number;
   stable_hits: number;
 }
+
+// ──── 自动跟踪相关类型 ────────────────────────────────────────────────────────
+
+export type AutoTrackStateValue =
+  | 'DISABLED'
+  | 'IDLE'
+  | 'DETECTING'
+  | 'TARGET_LOCKED'
+  | 'FOLLOWING'
+  | 'LOST_SHORT'
+  | 'OUT_OF_ZONE_PENDING'
+  | 'MANUAL_OVERRIDE'
+  | 'PAUSED'
+  | 'STOPPED';
+
+export interface ActiveTargetInfo {
+  track_id: number;
+  bbox: [number, number, number, number];
+  anchor_point: [number, number];
+  inside_zone: boolean;
+  lost_count: number;
+  out_of_zone_count: number;
+}
+
+export interface ArbiterStatus {
+  owner: 'NONE' | 'AUTO_TRACK' | 'WEB_MANUAL' | 'REMOTE_CONTROLLER' | 'E_STOP';
+  active_requesters: string[];
+  can_auto_track: boolean;
+}
+
+export interface AutoTrackStatus {
+  enabled: boolean;
+  paused: boolean;
+  state: AutoTrackStateValue;
+  active_target: ActiveTargetInfo | null;
+  stop_reason: string | null;
+  last_command: string | null;
+  frames_processed: number;
+  hit_count: number;
+  stable_hits_threshold: number;
+  control_arbiter: ArbiterStatus;
+  multi_target_mode: boolean;
+  candidate_count: number;
+}
+
+export interface KnownTarget {
+  track_id: number;
+}
+
